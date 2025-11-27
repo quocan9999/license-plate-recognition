@@ -1,6 +1,6 @@
 ultralytics
 streamlit
 easyocr
-opencv-python-headless
+opencv-python
 numpy
 Pillow
