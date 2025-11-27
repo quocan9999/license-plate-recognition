@@ -13,22 +13,21 @@ from utils import process_and_predict
 class MultiPlateApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Hệ thống Nhận diện Biển số Hàng loạt")
+        self.root.title("Hệ thống Nhận diện Biển số xe")
 
-        # --- CẤU HÌNH CỬA SỔ ---
         # Tự động phóng to toàn màn hình khi mở
         try:
             self.root.state('zoomed')  # Dành cho Windows
         except:
             self.root.attributes('-zoomed', True)  # Dành cho Linux/Mac
 
-        # --- 1. LOAD MODEL ---
+        # Load model
         self.model = None
         self.load_model()
 
         self.image_refs = []
 
-        # --- 2. GIAO DIỆN CHÍNH ---
+        # Giao diện chính
         self.top_frame = tk.Frame(root, bg="#f0f0f0", pady=10)
         self.top_frame.pack(fill="x")
 
@@ -40,7 +39,6 @@ class MultiPlateApp:
         tk.Label(self.top_frame, text="(Mẹo: Click đúp vào ảnh để mở xem chi tiết)", bg="#f0f0f0",
                  font=("Arial", 10, "italic")).pack()
 
-        # --- 3. TẠO VÙNG CUỘN (SCROLLABLE AREA) ---
         self.canvas = tk.Canvas(root, bg="white")
         self.scrollbar = tk.Scrollbar(root, orient="vertical", command=self.canvas.yview)
         self.scrollable_frame = tk.Frame(self.canvas, bg="white")
