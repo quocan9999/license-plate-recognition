@@ -164,39 +164,58 @@ def format_plate(text, vehicle_type):
     """
     Format biển số theo chuẩn Việt Nam
     
-    Ô TÔ: NN-L NNNNN  (ví dụ: 30-A 123.45)
-    XE MÁY: NN-LN NNN.NN  (ví dụ: 29-A1 123.45)
-    XE MÁY 50CC: NN-LL NNNNN  (ví dụ: 29-AA 12345)
+    BIỂN SỐ MỚI (5 số cuối):
+    - Ô TÔ: NN-L NNN.NN  (ví dụ: 30A-123.45)
+    - XE MÁY: NN-LN NNN.NN  (ví dụ: 29-A1 123.45)
+    - XE MÁY 50CC: NN-LL NNN.NN  (ví dụ: 29-AA 123.45)
+    
+    BIỂN SỐ CŨ (4 số cuối):
+    - Ô TÔ: NN-L NNNN  (ví dụ: 30A-4264)
+    - XE MÁY: NN-LN NNNN  (ví dụ: 29-A1 4264)
     """
     # Giới hạn độ dài
     if len(text) > 9: 
         text = text[:9]
     
     if vehicle_type == "XE MÁY":
-        # Xe máy 50cc: 29AA12345 -> 29-AA 123.45
-        if len(text) == 9 and not text[3].isdigit():
-            return f"{text[:2]}-{text[2:4]} {text[4:7]}.{text[7:]}"
+        # Xe máy 50cc
+        if len(text) >= 6 and not text[3].isdigit():
+            # 29AA12345 -> 29-AA 123.45 (9 ký tự - biển mới)
+            if len(text) == 9:
+                return f"{text[:2]}-{text[2:4]} {text[4:7]}.{text[7:]}"
+            # 29AA1234 -> 29-AA 1234 (8 ký tự - biển cũ)
+            elif len(text) == 8:
+                return f"{text[:2]}-{text[2:4]} {text[4:]}"
+            else:
+                return f"{text[:2]}-{text[2:4]} {text[4:]}"
         
-        # Xe máy thường: 29A11234 -> 29-A1 123.45  (8 ký tự)
-        elif len(text) == 8:
-            return f"{text[:2]}-{text[2:4]} {text[4:7]}.{text[7:]}"
-        
-        # Xe máy thường: 29A112345 -> 29-A1 123.45  (9 ký tự)
-        elif len(text) == 9:
-            return f"{text[:2]}-{text[2:4]} {text[4:7]}.{text[7:]}"
-        
-        # Nếu độ dài khác, format tối thiểu
-        elif len(text) >= 6:
-            return f"{text[:2]}-{text[2:4]} {text[4:]}"
+        # Xe máy thường
+        else:
+            # 29A112345 -> 29-A1 123.45 (9 ký tự - biển mới)
+            if len(text) == 9:
+                return f"{text[:2]}-{text[2:4]} {text[4:7]}.{text[7:]}"
+            # 29A11234 -> 29-A1 1234 (8 ký tự - biển cũ)
+            elif len(text) == 8:
+                return f"{text[:2]}-{text[2:4]} {text[4:]}"
+            # 29A1123 -> 29-A1 123 (7 ký tự - biển cũ thiếu)
+            elif len(text) == 7:
+                return f"{text[:2]}-{text[2:4]} {text[4:]}"
+            # Độ dài khác
+            elif len(text) >= 6:
+                return f"{text[:2]}-{text[2:4]} {text[4:]}"
 
     else:  # Ô TÔ
-        # 30A12345 -> 30A-123.45 (8 ký tự)
-        if len(text) >= 8:
+        # 30A12345 -> 30A-123.45 (8 ký tự - biển mới)
+        if len(text) == 8:
             return f"{text[:2]}{text[2]}-{text[3:6]}.{text[6:]}"
         
-        # 30A1234 -> 30A-1234 (7 ký tự)
+        # 30A1234 -> 30A-4264 (7 ký tự - biển cũ)
         elif len(text) == 7:
             return f"{text[:2]}{text[2]}-{text[3:]}"
+        
+        # 30A123456 -> 30A-123.45 (9 ký tự - cắt bớt)
+        elif len(text) == 9:
+            return f"{text[:2]}{text[2]}-{text[3:6]}.{text[6:8]}"
 
     return text
 
