@@ -8,11 +8,10 @@ import re
 # Khởi tạo EasyOCR
 reader = easyocr.Reader(['en'], gpu=False)
 
-# --- 1. CẬP NHẬT TỪ ĐIỂN MAPPING ---
-# Thêm 'U': '0' và các ký tự dễ nhầm khác
+# ---MAPPING ---
 dict_char_to_num = {
     'J': '3', 'I': '1', 'L': '1',
-    'O': '0', 'Q': '0', 'D': '0', 'U': '0', 'C': '0',  # Thêm U, C -> 0
+    'O': '0', 'Q': '0', 'D': '0', 'U': '0', 'C': '0',
     'B': '8', 'S': '5', 'Z': '7',
     'G': '9', 'A': '4',
     'T': '1'
@@ -23,7 +22,6 @@ dict_num_to_char = {
     '4': 'A', '8': 'B', '5': 'S',
     '7': 'Z', '9': 'G', '6': 'G'
 }
-
 
 def classify_vehicle(ocr_list):
     """Phân loại Xe máy vs Ô tô"""
@@ -37,40 +35,52 @@ def classify_vehicle(ocr_list):
         if len(line1_clean) == 0: return "KHÔNG RÕ"
 
         last_char = line1_clean[-1]
-
-        if last_char.isdigit():
+        
+        if last_char.isdigit(): # Nếu kí cuối của dòng 1 (kí tự thứ 3) là số thì là xe máy
             return "XE MÁY"
         else:
-            return "Ô TÔ"
+            if len(line1_clean) >= 4: # Nếu là chữ mà len >= 4 --> xe máy 50ccc
+                return "XE MÁY"
+            else:
+                return "Ô TÔ"
 
     return "KHÔNG RÕ"
 
 
-def fix_plate_chars(raw_text):
+def fix_plate_chars(raw_text, is_50cc=False):
     """
     Sửa lỗi ký tự dựa trên pattern biển số Việt Nam
     Pattern: NN L N... (2 Số - 1 Chữ - Các số còn lại)
+    Pattern 50cc: NN L L N... (2 Số - 2 Chữ - Các số còn lại)
     """
     text = re.sub(r'[^A-Z0-9]', '', raw_text.upper())
     chars = list(text)
 
     if len(chars) < 6: return text
 
-    # --- SỬA LỖI MÃ TỈNH (QUAN TRỌNG) ---
-    # 1. Hai vị trí đầu (Index 0, 1): LUÔN LÀ SỐ
-    # Ví dụ: 3U... -> 30..., 5Z... -> 57...
+    # Hai vị trí đầu (Index 0, 1) luôn là số
+    # Ví dụ: 3U -> 30
     for i in [0, 1]:
         if chars[i] in dict_char_to_num:
             chars[i] = dict_char_to_num[chars[i]]
-        # Nếu ký tự đó là chữ nhưng không nằm trong dict map (ví dụ 'K'),
-        # ta vẫn có thể cân nhắc thay thế nếu cần, nhưng tạm thời map các lỗi phổ biến là đủ.
 
-    # 2. Vị trí thứ 2 (Index 2): LUÔN LÀ CHỮ (Series)
+    # Vị trí thứ 2 (Index 2) luôn là chữ
     if chars[2] in dict_num_to_char:
         chars[2] = dict_num_to_char[chars[2]]
 
-    # 3. Từ vị trí thứ 3 (Index 3) trở đi: LUÔN LÀ SỐ
-    for i in range(3, len(chars)):
+    # Xử lý vị trí thứ 3 (Index 3)
+    start_index_for_numbers = 3
+
+    # Trường hợp nếu là xe máy 50cc
+    if is_50cc:
+        # Nếu là xe máy 50cc, vị trí thứ 3 là CHỮ (Ví dụ: 29AA)
+        if len(chars) > 3:
+            if chars[3] in dict_num_to_char:
+                chars[3] = dict_num_to_char[chars[3]]
+        start_index_for_numbers = 4
+    
+    # Các vị trí còn lại luôn là số
+    for i in range(start_index_for_numbers, len(chars)):
         if chars[i] in dict_char_to_num:
             chars[i] = dict_char_to_num[chars[i]]
 
@@ -113,18 +123,25 @@ def process_and_predict(image, model_yolo):
             if len(ocr_result) > 0:
                 vehicle_type = classify_vehicle(ocr_result)
 
+                # Check 50cc logic
+                is_50cc = False
+                if vehicle_type == "XE MÁY":
+                    line1 = ocr_result[0]
+                    line1_clean = re.sub(r'[^A-Z0-9]', '', line1.upper())
+                    # Nếu dòng 1 kết thúc bằng chữ và dài >= 4 thì là 50cc
+                    if len(line1_clean) >= 4 and not line1_clean[-1].isdigit():
+                        is_50cc = True
+
                 raw_text = "".join(ocr_result)
-                clean_text = fix_plate_chars(raw_text)
+                clean_text = fix_plate_chars(raw_text, is_50cc=is_50cc)
                 final_text = format_plate(clean_text, vehicle_type)
 
                 if len(final_text) > 5:
-                    # --- 2. SỬA PHẦN HIỂN THỊ ---
-
                     # Biến này để gửi về UI (Vẫn cần [Ô TÔ] để UI biết mà cắt chuỗi)
                     info_for_ui = f"[{vehicle_type}] {final_text}"
                     detected_plates.append(info_for_ui)
 
-                    # Biến này để vẽ lên ảnh (Chỉ vẽ biển số)
+                    # Biến này để vẽ lên ảnh
                     text_for_drawing = final_text
 
                     # Màu sắc
@@ -137,7 +154,7 @@ def process_and_predict(image, model_yolo):
                     (w, h), _ = cv2.getTextSize(text_for_drawing, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
                     cv2.rectangle(image_np, (x1, y1 - 40), (x1 + w, y1), color, -1)
 
-                    # Chỉ vẽ text biển số (30F-789.07)
+                    # Chỉ vẽ text biển số
                     cv2.putText(image_np, text_for_drawing, (x1, y1 - 10),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
 
