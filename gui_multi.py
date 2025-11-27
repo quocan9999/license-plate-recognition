@@ -41,6 +41,7 @@ class MultiPlateApp:
 
         self.canvas = tk.Canvas(root, bg="white")
         self.scrollbar = tk.Scrollbar(root, orient="vertical", command=self.canvas.yview)
+        self.h_scrollbar = tk.Scrollbar(root, orient="horizontal", command=self.canvas.xview)
         self.scrollable_frame = tk.Frame(self.canvas, bg="white")
 
         self.scrollable_frame.bind(
@@ -49,17 +50,22 @@ class MultiPlateApp:
         )
 
         self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.canvas.configure(yscrollcommand=self.scrollbar.set, xscrollcommand=self.h_scrollbar.set)
 
-        self.canvas.pack(side="left", fill="both", expand=True)
+        self.h_scrollbar.pack(side="bottom", fill="x")
         self.scrollbar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
         self.bind_mouse_scroll()
 
     def bind_mouse_scroll(self):
         def _on_mousewheel(event):
             self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        
+        def _on_shift_mousewheel(event):
+            self.canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
 
         self.canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        self.canvas.bind_all("<Shift-MouseWheel>", _on_shift_mousewheel)
 
     def load_model(self):
         try:
