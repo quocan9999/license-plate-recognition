@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 import easyocr
 import re
+from preprocessing import preprocess_for_ocr
 
 # Khởi tạo EasyOCR
 reader = easyocr.Reader(['en'], gpu=False)
@@ -234,9 +235,9 @@ def process_and_predict(image, model_yolo):
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             roi = image_np[y1:y2, x1:x2]
 
-            # OCR với preprocessing đơn giản
-            gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
-            ocr_result = reader.readtext(gray, detail=0)
+            # Tiền xử lý ảnh (sử dụng module preprocessing.py)
+            preprocessed = preprocess_for_ocr(roi)
+            ocr_result = reader.readtext(preprocessed, detail=0)
 
             if len(ocr_result) > 0:
                 # Phân loại loại xe
