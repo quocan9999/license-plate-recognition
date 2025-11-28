@@ -1,13 +1,9 @@
-# PHÂN LOẠI XE MÁY & Ô TÔ - Phiên bản cải tiến
+"""
+Module các hàm hỗ trợ cho nhận diện biển số xe Việt Nam
+Bao gồm: validation, formatting, character mapping, và phân loại xe
+"""
 
-import cv2
-import numpy as np
-import easyocr
 import re
-from preprocessing import preprocess_for_ocr
-
-# Khởi tạo EasyOCR
-reader = easyocr.Reader(['en'], gpu=False)
 
 # --- MÃ TỈNH THÀNH VIỆT NAM (11-99) ---
 VALID_PROVINCE_CODES = set(range(11, 100))  # 11-99
@@ -55,6 +51,12 @@ def classify_vehicle(ocr_list):
       + Dòng 1 kết thúc bằng CHỮ:
         * Nếu có 2 chữ liên tiếp (4+ ký tự) -> XE MÁY 50cc
         * Nếu chỉ 1 chữ (3 ký tự: NN-L) -> Ô TÔ
+    
+    Args:
+        ocr_list: Danh sách các dòng text từ OCR
+        
+    Returns:
+        Loại xe: "Ô TÔ", "XE MÁY", hoặc "KHÔNG RÕ"
     """
     if len(ocr_list) == 1:
         # 1 dòng -> Ô tô (ví dụ: 30A12345)
@@ -91,6 +93,12 @@ def classify_vehicle(ocr_list):
 def validate_province_code(code_str):
     """
     Kiểm tra mã tỉnh có hợp lệ không (11-99)
+    
+    Args:
+        code_str: Chuỗi mã tỉnh (2 ký tự)
+        
+    Returns:
+        True nếu hợp lệ, False nếu không
     """
     try:
         code = int(code_str)
@@ -119,6 +127,13 @@ def fix_plate_chars(raw_text, is_50cc=False):
       + NN: Mã tỉnh (2 số, 11-99)
       + LL: 2 chữ cái series (AA-ZZ)
       + NNNNN: 5 chữ số
+      
+    Args:
+        raw_text: Text thô từ OCR
+        is_50cc: True nếu là xe máy 50cc
+        
+    Returns:
+        Text đã được sửa lỗi
     """
     text = re.sub(r'[^A-Z0-9]', '', raw_text.upper())
     chars = list(text)
@@ -173,6 +188,13 @@ def format_plate(text, vehicle_type):
     BIỂN SỐ CŨ (4 số cuối):
     - Ô TÔ: NN-L NNNN  (ví dụ: 30A-4264)
     - XE MÁY: NN-LN NNNN  (ví dụ: 29-A1 4264)
+    
+    Args:
+        text: Text biển số đã được sửa lỗi
+        vehicle_type: Loại xe ("XE MÁY" hoặc "Ô TÔ")
+        
+    Returns:
+        Text biển số đã được format
     """
     # Giới hạn độ dài
     if len(text) > 9: 
@@ -219,65 +241,3 @@ def format_plate(text, vehicle_type):
             return f"{text[:2]}{text[2]}-{text[3:6]}.{text[6:8]}"
 
     return text
-
-
-def process_and_predict(image, model_yolo):
-    """
-    Xử lý ảnh và nhận diện biển số xe
-    """
-    image_np = np.array(image)
-    results = model_yolo(image_np)
-    detected_plates = []
-
-    for result in results:
-        boxes = result.boxes
-        for box in boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            roi = image_np[y1:y2, x1:x2]
-
-            # Tiền xử lý ảnh (sử dụng module preprocessing.py)
-            preprocessed = preprocess_for_ocr(roi)
-            ocr_result = reader.readtext(preprocessed, detail=0)
-
-            if len(ocr_result) > 0:
-                # Phân loại loại xe
-                vehicle_type = classify_vehicle(ocr_result)
-
-                # Kiểm tra xe máy 50cc
-                is_50cc = False
-                if vehicle_type == "XE MÁY":
-                    line1 = ocr_result[0]
-                    line1_clean = re.sub(r'[^A-Z0-9]', '', line1.upper())
-                    # Nếu dòng 1 kết thúc bằng chữ và dài >= 4 -> xe máy 50cc
-                    if len(line1_clean) >= 4 and not line1_clean[-1].isdigit():
-                        is_50cc = True
-
-                # Ghép và sửa lỗi
-                raw_text = "".join(ocr_result)
-                clean_text = fix_plate_chars(raw_text, is_50cc=is_50cc)
-                final_text = format_plate(clean_text, vehicle_type)
-
-                # Chỉ hiển thị nếu độ dài hợp lý
-                if len(final_text) > 5:
-                    # Chuẩn bị text cho UI
-                    info_for_ui = f"[{vehicle_type}] {final_text}"
-                    detected_plates.append(info_for_ui)
-
-                    # Text để vẽ lên ảnh (không có loại xe)
-                    text_for_drawing = final_text
-
-                    # Màu sắc: Xanh lá (xe máy), Cam (ô tô)
-                    color = (0, 255, 0) if vehicle_type == "XE MÁY" else (0, 165, 255)
-
-                    # Vẽ khung bao quanh biển số
-                    cv2.rectangle(image_np, (x1, y1), (x2, y2), color, 3)
-
-                    # Tính kích thước chữ để vẽ nền
-                    (w, h), _ = cv2.getTextSize(text_for_drawing, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
-                    cv2.rectangle(image_np, (x1, y1 - 40), (x1 + w, y1), color, -1)
-
-                    # Vẽ text biển số
-                    cv2.putText(image_np, text_for_drawing, (x1, y1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
-
-    return image_np, detected_plates

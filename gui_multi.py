@@ -6,8 +6,8 @@ import numpy as np
 import os
 import platform
 import subprocess
-from ultralytics import YOLO
-from utils import process_and_predict
+from modules.detection import LicensePlateDetector
+from modules.ocr import LicensePlateOCR
 
 
 class MultiPlateApp:
@@ -21,9 +21,9 @@ class MultiPlateApp:
         except:
             self.root.attributes('-zoomed', True)  # Dành cho Linux/Mac
 
-        # Load model
-        self.model = None
-        self.load_model()
+        # Khởi tạo detector và OCR
+        self.detector = LicensePlateDetector(model_path="models/best.pt")
+        self.ocr = LicensePlateOCR(languages=['en'], gpu=False)
 
         self.image_refs = []
 
@@ -67,13 +67,6 @@ class MultiPlateApp:
         self.canvas.bind_all("<MouseWheel>", _on_mousewheel)
         self.canvas.bind_all("<Shift-MouseWheel>", _on_shift_mousewheel)
 
-    def load_model(self):
-        try:
-            self.model = YOLO("models/best.pt")
-            print("Đã load model custom!")
-        except:
-            self.model = YOLO("yolov8n.pt")
-
     def select_images(self):
         file_paths = filedialog.askopenfilenames(
             title="Chọn các ảnh xe cần xử lý",
@@ -93,6 +86,47 @@ class MultiPlateApp:
                 subprocess.call(('xdg-open', file_path))
         except Exception as e:
             print(f"Không mở được file: {e}")
+
+    def process_and_predict(self, image):
+        """
+        Xử lý ảnh và nhận diện biển số xe
+        
+        Args:
+            image: PIL Image
+            
+        Returns:
+            tuple: (processed_image_np, detected_plates_list)
+        """
+        image_np = np.array(image)
+        detected_plates = []
+        
+        # Lấy các vùng ROI của biển số
+        plate_regions = self.detector.get_plate_regions(image_np)
+        
+        detections = []
+        for roi, bbox in plate_regions:
+            # OCR và xử lý biển số
+            plate_info = self.ocr.process_plate(roi)
+            
+            if plate_info and self.ocr.is_valid_plate(plate_info):
+                vehicle_type = plate_info['vehicle_type']
+                formatted_text = plate_info['formatted_text']
+                
+                # Chuẩn bị text cho UI
+                info_for_ui = f"[{vehicle_type}] {formatted_text}"
+                detected_plates.append(info_for_ui)
+                
+                # Thêm vào danh sách detection để vẽ
+                detections.append({
+                    'bbox': bbox,
+                    'text': formatted_text,
+                    'vehicle_type': vehicle_type
+                })
+        
+        # Vẽ các detection lên ảnh
+        processed_image = self.detector.draw_detections(image_np, detections)
+        
+        return processed_image, detected_plates
 
     def process_batch(self, file_paths):
         for widget in self.scrollable_frame.winfo_children():
@@ -116,7 +150,7 @@ class MultiPlateApp:
 
             try:
                 img_pil = Image.open(file_path)
-                processed_img_np, plates = process_and_predict(img_pil, self.model)
+                processed_img_np, plates = self.process_and_predict(img_pil)
                 result_pil = Image.fromarray(processed_img_np)
 
                 # --- CỘT 1: ẢNH GỐC ---
@@ -170,6 +204,8 @@ class MultiPlateApp:
 
             except Exception as e:
                 print(f"Lỗi: {e}")
+                import traceback
+                traceback.print_exc()
 
             self.root.update()
 
