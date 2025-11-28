@@ -1,10 +1,11 @@
 """
 Module OCR cho nhận diện ký tự biển số xe
+Sử dụng EasyOCR với Warping (nắn thẳng biển số)
 """
 
 import cv2
-import easyocr
 import re
+import easyocr
 from .preprocessing import preprocess_for_ocr
 from .utils import classify_vehicle, fix_plate_chars, format_plate
 
@@ -12,38 +13,40 @@ from .utils import classify_vehicle, fix_plate_chars, format_plate
 class LicensePlateOCR:
     """
     Class OCR cho nhận diện ký tự biển số xe Việt Nam
+    Sử dụng EasyOCR với Warping
     """
     
     def __init__(self, languages=['en'], gpu=False):
         """
-        Khởi tạo OCR reader
+        Khởi tạo EasyOCR reader
         
         Args:
             languages: Danh sách ngôn ngữ hỗ trợ
             gpu: Sử dụng GPU hay không
         """
         self.reader = easyocr.Reader(languages, gpu=gpu)
-        print(f"✓ Đã khởi tạo EasyOCR (GPU: {gpu})")
+        print(f"✓ Đã khởi tạo EasyOCR (GPU: {gpu}) với Warping")
     
     def read_text(self, image, detail=0):
         """
-        Đọc text từ ảnh
+        Đọc text từ ảnh sử dụng EasyOCR
         
         Args:
             image: Ảnh đầu vào (numpy array)
-            detail: Level chi tiết của kết quả (0: chỉ text, 1: full detail)
+            detail: 0 = chỉ text, 1 = full detail
             
         Returns:
-            Kết quả OCR
+            List các dòng text đã nhận diện
         """
         return self.reader.readtext(image, detail=detail)
     
-    def process_plate(self, roi):
+    def process_plate(self, roi, apply_warping=True):
         """
         Xử lý và nhận diện biển số từ ROI
         
         Args:
             roi: Ảnh vùng biển số (numpy array)
+            apply_warping: Có áp dụng warping (nắn thẳng) hay không
             
         Returns:
             Dict chứa thông tin biển số:
@@ -53,10 +56,10 @@ class LicensePlateOCR:
                 - formatted_text: Text đã format
                 - is_50cc: Có phải xe máy 50cc không
         """
-        # Tiền xử lý ảnh
-        preprocessed = preprocess_for_ocr(roi)
+        # Tiền xử lý ảnh (bao gồm warping nếu apply_warping=True)
+        preprocessed = preprocess_for_ocr(roi, apply_warping=apply_warping)
         
-        # OCR
+        # OCR với EasyOCR
         ocr_result = self.read_text(preprocessed, detail=0)
         
         if len(ocr_result) == 0:

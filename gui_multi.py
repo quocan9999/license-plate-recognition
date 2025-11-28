@@ -13,7 +13,7 @@ from modules.ocr import LicensePlateOCR
 class MultiPlateApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Hệ thống Nhận diện Biển số xe")
+        self.root.title("Hệ thống Nhận diện Biển số xe - EasyOCR + Warping")
 
         # Tự động phóng to toàn màn hình khi mở
         try:
@@ -21,7 +21,7 @@ class MultiPlateApp:
         except:
             self.root.attributes('-zoomed', True)  # Dành cho Linux/Mac
 
-        # Khởi tạo detector và OCR
+        # Khởi tạo detector và OCR (EasyOCR với Warping)
         self.detector = LicensePlateDetector(model_path="models/best.pt")
         self.ocr = LicensePlateOCR(languages=['en'], gpu=False)
 
@@ -36,7 +36,8 @@ class MultiPlateApp:
                                     font=("Arial", 14, "bold"), bg="#4CAF50", fg="white", padx=20, pady=5)
         self.btn_select.pack()
 
-        tk.Label(self.top_frame, text="(Mẹo: Click đúp vào ảnh để mở xem chi tiết)", bg="#f0f0f0",
+        tk.Label(self.top_frame, text="(Mẹo: Click đúp vào ảnh để mở xem chi tiết | Sử dụng EasyOCR + Warping)", 
+                 bg="#f0f0f0",
                  font=("Arial", 10, "italic")).pack()
 
         self.canvas = tk.Canvas(root, bg="white")
@@ -105,8 +106,8 @@ class MultiPlateApp:
         
         detections = []
         for roi, bbox in plate_regions:
-            # OCR và xử lý biển số
-            plate_info = self.ocr.process_plate(roi)
+            # OCR và xử lý biển số (với warping)
+            plate_info = self.ocr.process_plate(roi, apply_warping=True)
             
             if plate_info and self.ocr.is_valid_plate(plate_info):
                 vehicle_type = plate_info['vehicle_type']
