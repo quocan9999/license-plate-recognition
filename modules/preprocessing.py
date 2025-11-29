@@ -117,10 +117,10 @@ def detect_and_warp_plate(roi):
     # Nếu tìm thấy contour 4 góc, thực hiện warping
     if plate_contour is not None:
         warped = four_point_transform(roi, plate_contour.reshape(4, 2))
-        return warped
+        return warped, "warped"
     
     # Nếu không tìm thấy, trả về ảnh grayscale gốc
-    return gray
+    return gray, "grayscale"
 
 
 def preprocess_for_ocr(roi, apply_warping=True):
@@ -136,15 +136,16 @@ def preprocess_for_ocr(roi, apply_warping=True):
     """
     if apply_warping:
         # Áp dụng warping để nắn thẳng biển số
-        processed = detect_and_warp_plate(roi)
+        processed, method = detect_and_warp_plate(roi)
     else:
         # Chỉ chuyển sang grayscale
         if len(roi.shape) == 3:
             processed = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
         else:
             processed = roi.copy()
+        method = "grayscale"
     
-    return processed
+    return processed, method
 
 
 # def apply_adaptive_threshold(gray_image):

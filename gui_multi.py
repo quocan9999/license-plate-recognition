@@ -124,7 +124,9 @@ class MultiPlateApp:
                     'bbox': bbox,
                     'text': formatted_text,
                     'vehicle_type': vehicle_type,
-                    'roi': roi
+                    'roi': roi,
+                    'preprocessed_image': plate_info.get('preprocessed_image'),
+                    'preprocessing_method': plate_info.get('preprocessing_method')
                 })
         
         # Vẽ các detection lên ảnh
@@ -163,17 +165,19 @@ class MultiPlateApp:
                 writer = csv.writer(f)
                 # Header
                 if not file_exists:
-                    writer.writerow(['Timestamp', 'License Plate', 'Vehicle Type', 'Original Image Path', 'ROI Image Path'])
+                    writer.writerow(['Timestamp', 'License Plate', 'Vehicle Type', 'Original Image Path', 'ROI Image Path', 'Preprocessed Image Path'])
                 
                 # Nếu không có biển số nào
                 if not detections:
-                     writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), "No Plate", "", save_original_path, ""])
+                     writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), "No Plate", "", save_original_path, "", ""])
                 
                 # 2. Lưu từng biển số cắt được (ROI)
                 for i, det in enumerate(detections):
                     plate_text = det['text']
                     vehicle_type = det['vehicle_type']
                     roi = det['roi'] # numpy array (RGB)
+                    preprocessed_image = det.get('preprocessed_image')
+                    preprocessing_method = det.get('preprocessing_method', 'unknown')
                     
                     # Clean text cho tên file
                     clean_text = "".join(c for c in plate_text if c.isalnum())
@@ -186,8 +190,16 @@ class MultiPlateApp:
                     roi_pil = Image.fromarray(roi)
                     roi_pil.save(save_roi_path)
                     
+                    # Lưu ảnh Preprocessed (nếu có)
+                    save_preprocessed_path = ""
+                    if preprocessed_image is not None:
+                        # Tên file: ..._processed_method.jpg
+                        save_preprocessed_name = f"{timestamp}_{clean_text}_{i}_processed_{preprocessing_method}.jpg"
+                        save_preprocessed_path = os.path.join(save_dir, save_preprocessed_name)
+                        Image.fromarray(preprocessed_image).save(save_preprocessed_path)
+                    
                     # Ghi log
-                    writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), plate_text, vehicle_type, save_original_path, save_roi_path])
+                    writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), plate_text, vehicle_type, save_original_path, save_roi_path, save_preprocessed_path])
         except Exception as e:
             print(f"Lỗi khi lưu lịch sử: {e}")
 
