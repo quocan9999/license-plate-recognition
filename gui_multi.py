@@ -6,6 +6,8 @@ import numpy as np
 import os
 import platform
 import subprocess
+import csv
+from datetime import datetime
 from modules.detection import LicensePlateDetector
 from modules.ocr import LicensePlateOCR
 
@@ -96,7 +98,7 @@ class MultiPlateApp:
             image: PIL Image
             
         Returns:
-            tuple: (processed_image_np, detected_plates_list)
+            tuple: (processed_image_np, detected_plates_list, detections)
         """
         image_np = np.array(image)
         detected_plates = []
@@ -121,13 +123,73 @@ class MultiPlateApp:
                 detections.append({
                     'bbox': bbox,
                     'text': formatted_text,
-                    'vehicle_type': vehicle_type
+                    'vehicle_type': vehicle_type,
+                    'roi': roi
                 })
         
         # Vẽ các detection lên ảnh
         processed_image = self.detector.draw_detections(image_np, detections)
         
-        return processed_image, detected_plates
+        return processed_image, detected_plates, detections
+
+    def save_result(self, original_image_path, original_image_pil, detections):
+        # Tạo thư mục History nếu chưa có
+        base_dir = "History"
+        now = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        save_dir = os.path.join(base_dir, date_str)
+        os.makedirs(save_dir, exist_ok=True)
+        
+        timestamp = now.strftime("%Y%m%d_%H%M%S")
+        
+        # 1. Lưu ảnh gốc
+        # Lấy tên file gốc để dễ truy xuất
+        original_filename = os.path.basename(original_image_path)
+        name_no_ext = os.path.splitext(original_filename)[0]
+        
+        # Tên file: YYYYMMDD_HHMMSS_OriginalName.jpg
+        save_original_name = f"{timestamp}_{name_no_ext}.jpg"
+        save_original_path = os.path.join(save_dir, save_original_name)
+        
+        # Lưu ảnh gốc (convert RGB để đảm bảo đúng màu khi save bằng PIL)
+        original_image_pil.save(save_original_path)
+        
+        # File log CSV
+        csv_file = os.path.join(base_dir, "history.csv")
+        file_exists = os.path.isfile(csv_file)
+        
+        try:
+            with open(csv_file, mode='a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                # Header
+                if not file_exists:
+                    writer.writerow(['Timestamp', 'License Plate', 'Vehicle Type', 'Original Image Path', 'ROI Image Path'])
+                
+                # Nếu không có biển số nào
+                if not detections:
+                     writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), "No Plate", "", save_original_path, ""])
+                
+                # 2. Lưu từng biển số cắt được (ROI)
+                for i, det in enumerate(detections):
+                    plate_text = det['text']
+                    vehicle_type = det['vehicle_type']
+                    roi = det['roi'] # numpy array (RGB)
+                    
+                    # Clean text cho tên file
+                    clean_text = "".join(c for c in plate_text if c.isalnum())
+                    
+                    # Tên file ROI: YYYYMMDD_HHMMSS_BienSo_Index.jpg
+                    save_roi_name = f"{timestamp}_{clean_text}_{i}.jpg"
+                    save_roi_path = os.path.join(save_dir, save_roi_name)
+                    
+                    # Lưu ảnh ROI
+                    roi_pil = Image.fromarray(roi)
+                    roi_pil.save(save_roi_path)
+                    
+                    # Ghi log
+                    writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), plate_text, vehicle_type, save_original_path, save_roi_path])
+        except Exception as e:
+            print(f"Lỗi khi lưu lịch sử: {e}")
 
     def process_batch(self, file_paths):
         for widget in self.scrollable_frame.winfo_children():
@@ -151,7 +213,11 @@ class MultiPlateApp:
 
             try:
                 img_pil = Image.open(file_path)
-                processed_img_np, plates = self.process_and_predict(img_pil)
+                processed_img_np, plates, detections = self.process_and_predict(img_pil)
+                
+                # Lưu kết quả vào History
+                self.save_result(file_path, img_pil, detections)
+                
                 result_pil = Image.fromarray(processed_img_np)
 
                 # --- CỘT 1: ẢNH GỐC ---
