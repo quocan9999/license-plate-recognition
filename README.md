@@ -33,7 +33,8 @@ license-plate-recognition/
 
 ### 1. Yêu cầu hệ thống
 - Python 3.10.11
-- Khuyên dùng GPU (CUDA) để có tốc độ xử lý tốt nhất (tùy chọn).
+- Hệ điều hành: Windows, macOS hoặc Linux.
+- **Lưu ý**: Dự án được tối ưu để chạy trên **CPU**.
 
 ### 2. Cài đặt môi trường
 
@@ -58,11 +59,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-**Bước 3: Cài đặt các thư viện phụ thuộc**
+**Bước 3: Cài đặt PyTorch (Phiên bản CPU)**
+Để tối ưu dung lượng và tương thích, hãy cài đặt phiên bản PyTorch dành cho CPU trước:
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+```
+
+**Bước 4: Cài đặt các thư viện còn lại**
 ```bash
 pip install -r requirements.txt
 ```
-*Lưu ý: Nếu bạn muốn dùng GPU với PyTorch, hãy tham khảo trang chủ [PyTorch](https://pytorch.org/get-started/locally/) để cài đặt phiên bản phù hợp trước khi chạy lệnh trên.*
 
 ### 3. Chạy ứng dụng
 Sau khi cài đặt xong, bạn có thể khởi chạy chương trình bằng lệnh:
