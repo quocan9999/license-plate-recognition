@@ -138,16 +138,17 @@ class MultiPlateApp:
         # Tạo thư mục History nếu chưa có
         base_dir = "History"
         now = datetime.now()
-        date_str = now.strftime("%Y-%m-%d")
-        save_dir = os.path.join(base_dir, date_str)
-        os.makedirs(save_dir, exist_ok=True)
-        
         timestamp = now.strftime("%Y%m%d_%H%M%S")
         
         # 1. Lưu ảnh gốc
         # Lấy tên file gốc để dễ truy xuất
         original_filename = os.path.basename(original_image_path)
         name_no_ext = os.path.splitext(original_filename)[0]
+        
+        # Tạo thư mục riêng cho ảnh này: History/{Timestamp}_{OriginalName}
+        image_folder_name = f"{timestamp}_{name_no_ext}"
+        save_dir = os.path.join(base_dir, image_folder_name)
+        os.makedirs(save_dir, exist_ok=True)
         
         # Tên file: YYYYMMDD_HHMMSS_OriginalName.jpg
         save_original_name = f"{timestamp}_{name_no_ext}.jpg"
