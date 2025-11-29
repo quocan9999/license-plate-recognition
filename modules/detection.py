@@ -130,12 +130,15 @@ class LicensePlateDetector:
             
             # Vẽ text nếu có
             if text:
+                # Xóa các ký tự định dạng để vẽ lên ảnh
+                display_text = text.replace("-", "").replace(".", "")
+                
                 # Tính kích thước chữ để vẽ nền
-                (w, h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+                (w, h), _ = cv2.getTextSize(display_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
                 cv2.rectangle(image_copy, (x1, y1 - 40), (x1 + w, y1), box_color, -1)
                 
                 # Vẽ text
-                cv2.putText(image_copy, text, (x1, y1 - 10),
+                cv2.putText(image_copy, display_text, (x1, y1 - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
         
         return image_copy
