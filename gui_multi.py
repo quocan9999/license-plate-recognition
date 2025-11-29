@@ -162,7 +162,7 @@ class MultiPlateApp:
         file_exists = os.path.isfile(csv_file)
         
         try:
-            with open(csv_file, mode='a', newline='', encoding='utf-8') as f:
+            with open(csv_file, mode='a', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f)
                 # Header
                 if not file_exists:
