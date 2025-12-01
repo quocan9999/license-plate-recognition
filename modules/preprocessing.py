@@ -71,9 +71,43 @@ def four_point_transform(image, pts):
     return warped
 
 
+def apply_clahe(image):
+    """
+    Áp dụng CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    Giúp cân bằng sáng cục bộ, khắc phục bóng che hoặc lóa.
+    """
+    if len(image.shape) == 3:
+        # Chuyển sang LAB
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        
+        # Áp dụng CLAHE cho kênh L
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        cl = clahe.apply(l)
+        
+        # Merge lại
+        limg = cv2.merge((cl, a, b))
+        final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+        return final
+    else:
+        # Grayscale
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        return clahe.apply(image)
+
+
+def apply_super_resolution(image, scale=2):
+    """
+    Phóng to ảnh (Upscaling) dùng Bicubic Interpolation.
+    Giúp EasyOCR nhận diện tốt hơn với text nhỏ.
+    """
+    # Sử dụng Bicubic cho chất lượng tốt hơn Linear
+    return cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+
+
 def detect_and_warp_plate(roi):
     """
     Tự động phát hiện góc biển số và nắn thẳng
+    Cải tiến: Thêm Padding & Morphology để bắt contour tốt hơn
     
     Args:
         roi: Ảnh vùng biển số (numpy array)
@@ -81,51 +115,63 @@ def detect_and_warp_plate(roi):
     Returns:
         Ảnh đã được nắn thẳng, hoặc ảnh gốc nếu không phát hiện được góc
     """
-    # Chuyển sang grayscale
-    if len(roi.shape) == 3:
-        gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
+    # 1. Thêm Padding để tránh contour bị dính viền
+    h, w = roi.shape[:2]
+    padding = 10
+    padded_roi = cv2.copyMakeBorder(roi, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0,0,0])
+    
+    # 2. Chuyển sang grayscale
+    if len(padded_roi.shape) == 3:
+        gray = cv2.cvtColor(padded_roi, cv2.COLOR_BGR2GRAY)
     else:
-        gray = roi.copy()
+        gray = padded_roi.copy()
     
-    # Làm mờ để giảm nhiễu
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # 3. Tiền xử lý để tìm contour (Làm "đặc" biển số)
+    # Dùng Adaptive Threshold
+    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 19, 9)
     
-    # Phát hiện cạnh
-    edged = cv2.Canny(blurred, 50, 150)
+    # Morphology Close để nối liền các ký tự thành 1 khối đặc
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    morphed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=2)
     
-    # Tìm contours
-    contours, _ = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    # Nếu không tìm thấy contour, trả về ảnh gốc
-    if len(contours) == 0:
-        return gray
-    
-    # Sắp xếp contours theo diện tích (lớn nhất trước)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
+    # 4. Tìm contours
+    contours, _ = cv2.findContours(morphed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
     plate_contour = None
     
-    # Tìm contour có 4 góc (hình chữ nhật)
-    for contour in contours:
-        peri = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+    if len(contours) > 0:
+        # Sắp xếp contours theo diện tích (lớn nhất trước)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
         
-        if len(approx) == 4:
-            plate_contour = approx
-            break
+        for contour in contours:
+            peri = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+            
+            if len(approx) == 4:
+                plate_contour = approx
+                break
     
-    # Nếu tìm thấy contour 4 góc, thực hiện warping
+    # 5. Warping
     if plate_contour is not None:
-        warped = four_point_transform(roi, plate_contour.reshape(4, 2))
+        # Trừ đi padding để lấy tọa độ gốc trên ảnh roi ban đầu
+        pts = plate_contour.reshape(4, 2)
+        pts = pts - padding
+        
+        # Đảm bảo tọa độ không âm
+        pts = np.maximum(pts, 0)
+        
+        # Thực hiện warp trên ảnh gốc (roi)
+        warped = four_point_transform(roi, pts)
         return warped, "warped"
     
-    # Nếu không tìm thấy, trả về ảnh grayscale gốc
-    return gray, "grayscale"
+    # Nếu không tìm thấy, trả về ảnh gốc
+    return roi, "original"
 
 
 def preprocess_for_ocr(roi, apply_warping=True):
     """
     Tiền xử lý ảnh ROI (Region of Interest) của biển số
+    Pipeline: Warping -> Grayscale -> CLAHE -> Super-Resolution
     
     Args:
         roi: Ảnh vùng biển số (numpy array)
@@ -134,18 +180,29 @@ def preprocess_for_ocr(roi, apply_warping=True):
     Returns:
         Ảnh đã được tiền xử lý
     """
-    if apply_warping:
-        # Áp dụng warping để nắn thẳng biển số
-        processed, method = detect_and_warp_plate(roi)
-    else:
-        # Chỉ chuyển sang grayscale
-        if len(roi.shape) == 3:
-            processed = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
-        else:
-            processed = roi.copy()
-        method = "grayscale"
+    method_str = []
+    processed = roi
     
-    return processed, method
+    # 1. Warping
+    if apply_warping:
+        processed, method = detect_and_warp_plate(roi)
+        if method == "warped":
+            method_str.append("warped")
+    
+    # 2. Grayscale (EasyOCR hoạt động tốt trên Gray/Binary)
+    if len(processed.shape) == 3:
+        processed = cv2.cvtColor(processed, cv2.COLOR_BGR2GRAY)
+        method_str.append("gray")
+    
+    # 3. CLAHE (Cân bằng sáng)
+    processed = apply_clahe(processed)
+    method_str.append("clahe")
+    
+    # 4. Super-Resolution (Phóng to)
+    processed = apply_super_resolution(processed, scale=2)
+    method_str.append("upscale")
+    
+    return processed, "+".join(method_str)
 
 
 # def apply_adaptive_threshold(gray_image):
