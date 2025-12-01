@@ -7,15 +7,45 @@ Package này chứa các module chính cho hệ thống nhận diện biển s�
 ```
 modules/
 ├── __init__.py          # Package initialization và exports
+├── config.py            # Cấu hình và hằng số hệ thống
 ├── detection.py         # Module phát hiện biển số (YOLO)
+├── logger.py            # Module quản lý log và lịch sử
 ├── ocr.py               # Module OCR và xử lý text
 ├── preprocessing.py     # Module tiền xử lý ảnh
-└── utils.py             # Module các hàm hỗ trợ
+├── utils.py             # Module các hàm hỗ trợ
 ```
 
 ## Chi tiết các Module
 
-### 1. `detection.py` - Module Phát hiện Biển số
+### 1. `config.py` - Module Cấu hình
+
+**Chức năng:**
+- Tập trung hóa toàn bộ cấu hình và hằng số của dự án.
+- Bao gồm: Đường dẫn model, màu sắc hiển thị, tham số thuật toán (CLAHE, Threshold, Warping), cài đặt OCR.
+
+**Ví dụ:**
+```python
+from modules.config import MODEL_PATH, COLOR_MOTO
+```
+
+### 2. `logger.py` - Module Logger
+
+**Class: `HistoryLogger`**
+
+**Chức năng:**
+- Quản lý việc lưu trữ lịch sử nhận diện.
+- Lưu ảnh gốc, ảnh ROI, ảnh tiền xử lý vào thư mục `History/Timestamp_Name`.
+- Ghi log chi tiết vào file `history.csv`.
+
+**Ví dụ sử dụng:**
+```python
+from modules.logger import HistoryLogger
+
+logger = HistoryLogger()
+logger.save_result(image_path, original_img, detections)
+```
+
+### 3. `detection.py` - Module Phát hiện Biển số
 
 **Class: `LicensePlateDetector`**
 
@@ -29,11 +59,11 @@ Ví dụ sử dụng:
 ```python
 from modules.detection import LicensePlateDetector
 
-detector = LicensePlateDetector(model_path="models/best.pt")
+detector = LicensePlateDetector()
 plate_regions = detector.get_plate_regions(image)
 ```
 
-### 2. `ocr.py` - Module OCR
+### 4. `ocr.py` - Module OCR
 
 **Class: `LicensePlateOCR`**
 
@@ -48,17 +78,18 @@ Ví dụ sử dụng:
 ```python
 from modules.ocr import LicensePlateOCR
 
-ocr = LicensePlateOCR(languages=['en'], gpu=False)
+ocr = LicensePlateOCR()
 plate_info = ocr.process_plate(roi)
 ```
 
-### 3. `preprocessing.py` - Module Tiền xử lý
+### 5. `preprocessing.py` - Module Tiền xử lý
 
 **Functions:**
-- `preprocess_for_ocr(roi)` - Tiền xử lý cơ bản (grayscale)
-- `apply_adaptive_threshold(gray_image)` - Adaptive thresholding
-- `denoise_image(image)` - Khử nhiễu
-- `enhance_contrast(image)` - Tăng cường độ tương phản
+- `preprocess_for_ocr(roi)` - Pipeline tiền xử lý toàn diện (Warping -> Gray -> CLAHE -> Upscale)
+- `detect_and_warp_plate(roi)` - Tự động phát hiện góc và nắn thẳng biển số
+- `apply_clahe(image)` - Cân bằng sáng cục bộ
+- `apply_super_resolution(image)` - Phóng to ảnh (Upscaling)
+- `four_point_transform(image, pts)` - Biến đổi hình học
 
 Ví dụ sử dụng:
 ```python
@@ -68,7 +99,7 @@ preprocessed = preprocess_for_ocr(roi)
 enhanced = enhance_contrast(preprocessed)
 ```
 
-### 4. `utils.py` - Module Hỗ trợ
+### 6. `utils.py` - Module Hỗ trợ
 
 **Functions:**
 
@@ -139,15 +170,21 @@ File `gui_multi.py` đã được refactor để sử dụng các module này:
 ```python
 from modules.detection import LicensePlateDetector
 from modules.ocr import LicensePlateOCR
+from modules.logger import HistoryLogger
 
 # Trong class MultiPlateApp
-self.detector = LicensePlateDetector(model_path="models/best.pt")
-self.ocr = LicensePlateOCR(languages=['en'], gpu=False)
+# Tự động load cấu hình từ config.py
+self.detector = LicensePlateDetector()
+self.ocr = LicensePlateOCR()
+self.logger = HistoryLogger()
 
 # Xử lý ảnh
 plate_regions = self.detector.get_plate_regions(image)
 for roi, bbox in plate_regions:
     plate_info = self.ocr.process_plate(roi)
+    
+# Lưu lịch sử
+self.logger.save_result(path, img, detections)
 ```
 
 ## Lợi ích của Refactoring

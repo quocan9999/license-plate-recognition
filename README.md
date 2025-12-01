@@ -17,7 +17,9 @@ Dự án này là một hệ thống nhận diện biển số xe tự động s
 license-plate-recognition/
 ├── gui_multi.py          # File chạy chính (Giao diện người dùng)
 ├── modules/              # Các module xử lý chính
+│   ├── config.py         # Cấu hình và hằng số hệ thống
 │   ├── detection.py      # Module phát hiện biển số (YOLO)
+│   ├── logger.py         # Module quản lý log và lịch sử
 │   ├── ocr.py            # Module đọc biển số (EasyOCR)
 │   ├── preprocessing.py  # Module tiền xử lý ảnh
 │   └── utils.py          # Các hàm hỗ trợ (xử lý chuỗi, format)
@@ -40,7 +42,7 @@ license-plate-recognition/
 
 **Bước 1: Clone dự án về máy**
 ```bash
-git clone https://github.com/username/license-plate-recognition.git
+git clone https://github.com/quocan9999/license-plate-recognition.git
 cd license-plate-recognition
 ```
 
@@ -58,6 +60,8 @@ python -m venv .venv
 python3 -m venv .venv
 source .venv/bin/activate
 ```
+
+> **Lưu ý:** Sau khi kích hoạt thành công, bạn sẽ thấy tên môi trường ảo `(.venv)` xuất hiện ở đầu dòng lệnh trong terminal. Ví dụ: `(.venv) C:\Users\Name\Project>`
 
 **Bước 3: Cài đặt PyTorch (Phiên bản CPU)**
 Để tối ưu dung lượng và tương thích, hãy cài đặt phiên bản PyTorch dành cho CPU trước:
