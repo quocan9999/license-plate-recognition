@@ -17,6 +17,19 @@ class MultiPlateApp:
         self.root.title("Hệ thống Nhận diện Biển số xe - EasyOCR + Warping")
 
         # Tự động phóng to toàn màn hình khi mở
+        try:
+            self.root.state('zoomed')  # Dành cho Windows
+        except:
+            self.root.attributes('-zoomed', True)  # Dành cho Linux/Mac
+
+        # Khởi tạo detector và OCR (EasyOCR với Warping)
+        self.detector = LicensePlateDetector()
+        self.ocr = LicensePlateOCR()
+        self.logger = HistoryLogger()
+
+        self.image_refs = []
+
+        # Giao diện chính
         self.top_frame = tk.Frame(root, bg="#f0f0f0", pady=10)
         self.top_frame.pack(fill="x")
 
