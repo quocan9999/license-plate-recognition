@@ -183,26 +183,32 @@ def preprocess_for_ocr(roi, apply_warping=True):
     method_str = []
     processed = roi
     
+    intermediates = {}
+    
     # 1. Warping
     if apply_warping:
         processed, method = detect_and_warp_plate(roi)
         if method == "warped":
             method_str.append("warped")
+            intermediates["warped"] = processed.copy()
     
     # 2. Grayscale (EasyOCR hoạt động tốt trên Gray/Binary)
     if len(processed.shape) == 3:
         processed = cv2.cvtColor(processed, cv2.COLOR_BGR2GRAY)
         method_str.append("gray")
+        intermediates["gray"] = processed.copy()
     
     # 3. CLAHE (Cân bằng sáng)
     processed = apply_clahe(processed)
     method_str.append("clahe")
+    intermediates["clahe"] = processed.copy()
     
     # 4. Super-Resolution (Phóng to)
     processed = apply_super_resolution(processed, scale=2)
     method_str.append("upscale")
+    intermediates["upscale"] = processed.copy()
     
-    return processed, "+".join(method_str)
+    return processed, "+".join(method_str), intermediates
 
 
 # def apply_adaptive_threshold(gray_image):

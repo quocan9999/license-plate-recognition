@@ -126,7 +126,8 @@ class MultiPlateApp:
                     'vehicle_type': vehicle_type,
                     'roi': roi,
                     'preprocessed_image': plate_info.get('preprocessed_image'),
-                    'preprocessing_method': plate_info.get('preprocessing_method')
+                    'preprocessing_method': plate_info.get('preprocessing_method'),
+                    'intermediate_images': plate_info.get('intermediate_images')
                 })
         
         # Vẽ các detection lên ảnh
@@ -179,6 +180,7 @@ class MultiPlateApp:
                     roi = det['roi'] # numpy array (RGB)
                     preprocessed_image = det.get('preprocessed_image')
                     preprocessing_method = det.get('preprocessing_method', 'unknown')
+                    intermediate_images = det.get('intermediate_images', {})
                     
                     # Clean text cho tên file
                     clean_text = "".join(c for c in plate_text if c.isalnum())
@@ -194,10 +196,17 @@ class MultiPlateApp:
                     # Lưu ảnh Preprocessed (nếu có)
                     save_preprocessed_path = ""
                     if preprocessed_image is not None:
-                        # Tên file: ..._processed_method.jpg
-                        save_preprocessed_name = f"{timestamp}_{clean_text}_{i}_processed_{preprocessing_method}.jpg"
-                        save_preprocessed_path = os.path.join(save_dir, save_preprocessed_name)
+                        # 1. Lưu ảnh kết quả cuối cùng: ..._processed.jpg
+                        save_final_name = f"{timestamp}_{clean_text}_{i}_processed.jpg"
+                        save_preprocessed_path = os.path.join(save_dir, save_final_name)
                         Image.fromarray(preprocessed_image).save(save_preprocessed_path)
+                        
+                        # 2. Lưu từng bước trung gian
+                        if intermediate_images:
+                            for step_name, step_img in intermediate_images.items():
+                                save_step_name = f"{timestamp}_{clean_text}_{i}_processed_{step_name}.jpg"
+                                save_step_path = os.path.join(save_dir, save_step_name)
+                                Image.fromarray(step_img).save(save_step_path)
                     
                     # Ghi log
                     writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), plate_text, vehicle_type, save_original_path, save_roi_path, save_preprocessed_path])

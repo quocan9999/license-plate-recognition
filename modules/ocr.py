@@ -57,7 +57,7 @@ class LicensePlateOCR:
                 - is_50cc: Có phải xe máy 50cc không
         """
         # Tiền xử lý ảnh (bao gồm warping nếu apply_warping=True)
-        preprocessed, method = preprocess_for_ocr(roi, apply_warping=apply_warping)
+        preprocessed, method, intermediates = preprocess_for_ocr(roi, apply_warping=apply_warping)
         
         # OCR với EasyOCR
         ocr_result = self.read_text(preprocessed, detail=0)
@@ -90,7 +90,8 @@ class LicensePlateOCR:
             'is_50cc': is_50cc,
             'ocr_lines': ocr_result,
             'preprocessed_image': preprocessed,
-            'preprocessing_method': method
+            'preprocessing_method': method,
+            'intermediate_images': intermediates
         }
     
     def is_valid_plate(self, plate_info):
