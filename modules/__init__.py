@@ -16,9 +16,12 @@ from .utils import (
     dict_num_to_char
 )
 
+from .logger import HistoryLogger
+
 __all__ = [
     'LicensePlateDetector',
     'LicensePlateOCR',
+    'HistoryLogger',
     'preprocess_for_ocr',
     'classify_vehicle',
     'validate_province_code',
