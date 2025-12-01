@@ -107,28 +107,38 @@ class MultiPlateApp:
         plate_regions = self.detector.get_plate_regions(image_np)
         
         detections = []
+        valid_plates = []
+        
+        # Bước 1: Thu thập tất cả các biển số hợp lệ
         for roi, bbox in plate_regions:
             # OCR và xử lý biển số (với warping)
             plate_info = self.ocr.process_plate(roi, apply_warping=True)
             
             if plate_info and self.ocr.is_valid_plate(plate_info):
-                vehicle_type = plate_info['vehicle_type']
-                formatted_text = plate_info['formatted_text']
-                
-                # Chuẩn bị text cho UI
-                info_for_ui = f"[{vehicle_type}] {formatted_text}"
-                detected_plates.append(info_for_ui)
-                
-                # Thêm vào danh sách detection để vẽ
-                detections.append({
-                    'bbox': bbox,
-                    'text': formatted_text,
-                    'vehicle_type': vehicle_type,
-                    'roi': roi,
-                    'preprocessed_image': plate_info.get('preprocessed_image'),
-                    'preprocessing_method': plate_info.get('preprocessing_method'),
-                    'intermediate_images': plate_info.get('intermediate_images')
-                })
+                valid_plates.append((plate_info, bbox, roi))
+
+        # Bước 2: Format kết quả và thêm vào danh sách detections
+        num_plates = len(valid_plates)
+        
+        for i, (plate_info, bbox, roi) in enumerate(valid_plates):
+            vehicle_type = plate_info['vehicle_type']
+            formatted_text = plate_info['formatted_text']
+            
+            # Chuẩn bị text cho UI
+            prefix = f"#{i+1} " if num_plates > 1 else ""
+            info_for_ui = f"{prefix}[{vehicle_type}] {formatted_text}"
+            detected_plates.append(info_for_ui)
+            
+            # Thêm vào danh sách detection để vẽ
+            detections.append({
+                'bbox': bbox,
+                'text': formatted_text,
+                'vehicle_type': vehicle_type,
+                'roi': roi,
+                'preprocessed_image': plate_info.get('preprocessed_image'),
+                'preprocessing_method': plate_info.get('preprocessing_method'),
+                'intermediate_images': plate_info.get('intermediate_images')
+            })
         
         # Vẽ các detection lên ảnh
         processed_image = self.detector.draw_detections(image_np, detections)

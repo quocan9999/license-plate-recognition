@@ -119,8 +119,9 @@ class LicensePlateDetector:
             Ảnh đã được vẽ detection
         """
         image_copy = image.copy()
+        num_detections = len(detections)
         
-        for detection in detections:
+        for i, detection in enumerate(detections):
             bbox = detection['bbox']
             text = detection.get('text', '')
             vehicle_type = detection.get('vehicle_type', '')
@@ -143,12 +144,32 @@ class LicensePlateDetector:
                 # Xóa các ký tự định dạng để vẽ lên ảnh
                 display_text = text.replace("-", "").replace(".", "")
                 
+                # Thêm số thứ tự nếu có nhiều hơn 1 biển số
+                if num_detections > 1:
+                    display_text = f"#{i+1} {display_text}"
+                
                 # Tính kích thước chữ để vẽ nền
                 (w, h), _ = cv2.getTextSize(display_text, cv2.FONT_HERSHEY_SIMPLEX, TEXT_FONT_SCALE, TEXT_THICKNESS)
-                cv2.rectangle(image_copy, (x1, y1 - 40), (x1 + w, y1), box_color, -1)
+                
+                # Tính toán vị trí vẽ text
+                text_x = x1
+                text_y = y1 - 10
+                
+                # Nếu text bị che ở cạnh trên (y1 quá nhỏ) -> vẽ xuống dưới box
+                if y1 < h + 10:
+                    text_y = y2 + h + 10
+                    
+                # Nếu text bị che ở cạnh phải (x1 + w quá lớn) -> dời sang trái
+                img_h, img_w = image_copy.shape[:2]
+                if text_x + w > img_w:
+                    text_x = img_w - w - 5
+                
+                # Vẽ nền cho text
+                # Điều chỉnh tọa độ nền dựa trên vị trí text_y
+                cv2.rectangle(image_copy, (text_x, text_y - h - 5), (text_x + w, text_y + 5), box_color, -1)
                 
                 # Vẽ text
-                cv2.putText(image_copy, display_text, (x1, y1 - 10),
+                cv2.putText(image_copy, display_text, (text_x, text_y),
                            cv2.FONT_HERSHEY_SIMPLEX, TEXT_FONT_SCALE, (255, 255, 255), TEXT_THICKNESS)
         
         return image_copy
