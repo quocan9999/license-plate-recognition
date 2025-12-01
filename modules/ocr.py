@@ -3,7 +3,7 @@ Module OCR cho nhận diện ký tự biển số xe
 Sử dụng EasyOCR với Warping (nắn thẳng biển số)
 """
 
-import cv2
+
 import re
 import easyocr
 from .preprocessing import preprocess_for_ocr
