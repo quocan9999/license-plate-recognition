@@ -8,6 +8,7 @@ import re
 import easyocr
 from .preprocessing import preprocess_for_ocr
 from .utils import classify_vehicle, fix_plate_chars, format_plate
+from .config import OCR_LANGUAGES, OCR_GPU
 
 
 class LicensePlateOCR:
@@ -16,7 +17,7 @@ class LicensePlateOCR:
     Sử dụng EasyOCR với Warping
     """
     
-    def __init__(self, languages=['en'], gpu=False):
+    def __init__(self, languages=OCR_LANGUAGES, gpu=OCR_GPU):
         """
         Khởi tạo EasyOCR reader
         

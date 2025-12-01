@@ -7,13 +7,14 @@ import csv
 from datetime import datetime
 from PIL import Image
 import numpy as np
+from .config import HISTORY_DIR, HISTORY_CSV_FILE
 
 class HistoryLogger:
     """
     Class quản lý việc lưu trữ lịch sử nhận diện, bao gồm ảnh và file CSV
     """
     
-    def __init__(self, base_dir="History"):
+    def __init__(self, base_dir=HISTORY_DIR):
         """
         Khởi tạo logger
         
@@ -56,7 +57,7 @@ class HistoryLogger:
             original_image_pil.save(save_original_path)
             
             # File log CSV
-            csv_file = os.path.join(self.base_dir, "history.csv")
+            csv_file = os.path.join(self.base_dir, HISTORY_CSV_FILE)
             file_exists = os.path.isfile(csv_file)
             
             with open(csv_file, mode='a', newline='', encoding='utf-8-sig') as f:

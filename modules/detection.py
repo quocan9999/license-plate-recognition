@@ -5,6 +5,16 @@ Module phát hiện biển số xe sử dụng YOLO
 import cv2
 import numpy as np
 from ultralytics import YOLO
+from .config import (
+    MODEL_PATH, 
+    FALLBACK_MODEL_PATH, 
+    COLOR_DEFAULT, 
+    COLOR_MOTO, 
+    COLOR_CAR, 
+    BBOX_THICKNESS,
+    TEXT_FONT_SCALE,
+    TEXT_THICKNESS
+)
 
 
 class LicensePlateDetector:
@@ -12,7 +22,7 @@ class LicensePlateDetector:
     Class phát hiện biển số xe sử dụng YOLO model
     """
     
-    def __init__(self, model_path="models/best.pt", fallback_model="yolov8n.pt"):
+    def __init__(self, model_path=MODEL_PATH, fallback_model=FALLBACK_MODEL_PATH):
         """
         Khởi tạo detector với YOLO model
         
@@ -95,7 +105,7 @@ class LicensePlateDetector:
         
         return plate_regions
     
-    def draw_detections(self, image, detections, color=(0, 255, 0), thickness=3):
+    def draw_detections(self, image, detections, color=COLOR_DEFAULT, thickness=BBOX_THICKNESS):
         """
         Vẽ các detection lên ảnh
         
@@ -119,9 +129,9 @@ class LicensePlateDetector:
             
             # Chọn màu theo loại xe
             if vehicle_type == "XE MÁY":
-                box_color = (0, 255, 0)  # Xanh lá
+                box_color = COLOR_MOTO
             elif vehicle_type == "Ô TÔ":
-                box_color = (0, 165, 255)  # Cam
+                box_color = COLOR_CAR
             else:
                 box_color = color
             
@@ -134,11 +144,11 @@ class LicensePlateDetector:
                 display_text = text.replace("-", "").replace(".", "")
                 
                 # Tính kích thước chữ để vẽ nền
-                (w, h), _ = cv2.getTextSize(display_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+                (w, h), _ = cv2.getTextSize(display_text, cv2.FONT_HERSHEY_SIMPLEX, TEXT_FONT_SCALE, TEXT_THICKNESS)
                 cv2.rectangle(image_copy, (x1, y1 - 40), (x1 + w, y1), box_color, -1)
                 
                 # Vẽ text
                 cv2.putText(image_copy, display_text, (x1, y1 - 10),
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                           cv2.FONT_HERSHEY_SIMPLEX, TEXT_FONT_SCALE, (255, 255, 255), TEXT_THICKNESS)
         
         return image_copy

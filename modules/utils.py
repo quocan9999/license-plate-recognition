@@ -4,9 +4,10 @@ Bao gồm: validation, formatting, character mapping, và phân loại xe
 """
 
 import re
+from .config import VALID_PROVINCE_START, VALID_PROVINCE_END
 
 # --- MÃ TỈNH THÀNH VIỆT NAM (11-99) ---
-VALID_PROVINCE_CODES = set(range(11, 100))  # 11-99
+VALID_PROVINCE_CODES = set(range(VALID_PROVINCE_START, VALID_PROVINCE_END))  # 11-99
 
 # --- MAPPING CẢI TIẾN ---
 # Mapping: Chữ -> Số (dùng cho vị trí phải là SỐ)

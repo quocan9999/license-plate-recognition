@@ -5,6 +5,14 @@ Bao gồm: Grayscale conversion, Warping (nắn thẳng), và các kỹ thuật 
 
 import cv2
 import numpy as np
+from .config import (
+    CLAHE_CLIP_LIMIT, 
+    CLAHE_TILE_GRID_SIZE, 
+    UPSCALE_SCALE, 
+    WARP_PADDING,
+    ADAPTIVE_THRESH_BLOCK_SIZE,
+    ADAPTIVE_THRESH_C
+)
 
 
 def order_points(pts):
@@ -82,7 +90,7 @@ def apply_clahe(image):
         l, a, b = cv2.split(lab)
         
         # Áp dụng CLAHE cho kênh L
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID_SIZE)
         cl = clahe.apply(l)
         
         # Merge lại
@@ -91,11 +99,11 @@ def apply_clahe(image):
         return final
     else:
         # Grayscale
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID_SIZE)
         return clahe.apply(image)
 
 
-def apply_super_resolution(image, scale=2):
+def apply_super_resolution(image, scale=UPSCALE_SCALE):
     """
     Phóng to ảnh (Upscaling) dùng Bicubic Interpolation.
     Giúp EasyOCR nhận diện tốt hơn với text nhỏ.
@@ -117,7 +125,7 @@ def detect_and_warp_plate(roi):
     """
     # 1. Thêm Padding để tránh contour bị dính viền
     h, w = roi.shape[:2]
-    padding = 10
+    padding = WARP_PADDING
     padded_roi = cv2.copyMakeBorder(roi, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=[0,0,0])
     
     # 2. Chuyển sang grayscale
@@ -128,7 +136,7 @@ def detect_and_warp_plate(roi):
     
     # 3. Tiền xử lý để tìm contour (Làm "đặc" biển số)
     # Dùng Adaptive Threshold
-    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 19, 9)
+    thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, ADAPTIVE_THRESH_BLOCK_SIZE, ADAPTIVE_THRESH_C)
     
     # Morphology Close để nối liền các ký tự thành 1 khối đặc
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
@@ -204,7 +212,7 @@ def preprocess_for_ocr(roi, apply_warping=True):
     intermediates["clahe"] = processed.copy()
     
     # 4. Super-Resolution (Phóng to)
-    processed = apply_super_resolution(processed, scale=2)
+    processed = apply_super_resolution(processed, scale=UPSCALE_SCALE)
     method_str.append("upscale")
     intermediates["upscale"] = processed.copy()
     
