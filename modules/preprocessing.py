@@ -5,6 +5,7 @@ Bao gồm: Grayscale conversion, Warping (nắn thẳng), và các kỹ thuật 
 
 import cv2
 import numpy as np
+from typing import List, Tuple, Optional, Union
 from .config import (
     CLAHE_CLIP_LIMIT, 
     CLAHE_TILE_GRID_SIZE, 
@@ -15,15 +16,10 @@ from .config import (
 )
 
 
-def order_points(pts):
+def order_points(pts: np.ndarray) -> np.ndarray:
     """
     Sắp xếp các điểm theo thứ tự: top-left, top-right, bottom-right, bottom-left
-    
-    Args:
-        pts: Array 4 điểm
-        
-    Returns:
-        Array 4 điểm đã được sắp xếp
+    ...
     """
     rect = np.zeros((4, 2), dtype="float32")
     
@@ -40,16 +36,10 @@ def order_points(pts):
     return rect
 
 
-def four_point_transform(image, pts):
+def four_point_transform(image: np.ndarray, pts: np.ndarray) -> np.ndarray:
     """
     Perspective transform để nắn thẳng ảnh dựa trên 4 điểm
-    
-    Args:
-        image: Ảnh đầu vào
-        pts: 4 điểm góc của vùng cần transform
-        
-    Returns:
-        Ảnh đã được nắn thẳng
+    ...
     """
     rect = order_points(pts)
     (tl, tr, br, bl) = rect
@@ -79,10 +69,10 @@ def four_point_transform(image, pts):
     return warped
 
 
-def apply_clahe(image):
+def apply_clahe(image: np.ndarray) -> np.ndarray:
     """
     Áp dụng CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    Giúp cân bằng sáng cục bộ, khắc phục bóng che hoặc lóa.
+    ...
     """
     if len(image.shape) == 3:
         # Chuyển sang LAB
@@ -103,10 +93,10 @@ def apply_clahe(image):
         return clahe.apply(image)
 
 
-def apply_threshold(image, method='otsu'):
+def apply_threshold(image: np.ndarray, method: str = 'otsu') -> np.ndarray:
     """
     Áp dụng phân ngưỡng (Thresholding) để chuyển sang ảnh nhị phân.
-    Giúp tách chữ khỏi nền nhiễu.
+    ...
     """
     if len(image.shape) == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -122,10 +112,10 @@ def apply_threshold(image, method='otsu'):
         return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
     return gray
 
-def apply_super_resolution(image, scale=UPSCALE_SCALE):
+def apply_super_resolution(image: np.ndarray, scale: int = UPSCALE_SCALE) -> np.ndarray:
     """
     Phóng to ảnh (Upscaling) dùng Bicubic Interpolation.
-    Chỉ nên dùng khi ảnh quá nhỏ (< 64px cao).
+    ...
     """
     h, w = image.shape[:2]
     if h < 64: # Chỉ upscale nếu ảnh nhỏ
@@ -133,16 +123,10 @@ def apply_super_resolution(image, scale=UPSCALE_SCALE):
     return image
 
 
-def detect_and_warp_plate(roi):
+def detect_and_warp_plate(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     """
     Tự động phát hiện góc biển số và nắn thẳng
-    Cải tiến: Thêm Padding & Morphology để bắt contour tốt hơn
-    
-    Args:
-        roi: Ảnh vùng biển số (numpy array)
-        
-    Returns:
-        Ảnh đã được nắn thẳng, hoặc ảnh gốc nếu không phát hiện được góc
+    ...
     """
     # 1. Thêm Padding để tránh contour bị dính viền
     h, w = roi.shape[:2]
@@ -213,17 +197,10 @@ def detect_and_warp_plate(roi):
     return roi, "original"
 
 
-def preprocess_for_ocr(roi, apply_warping=True):
+def preprocess_for_ocr(roi: np.ndarray, apply_warping: bool = True) -> List[Tuple[np.ndarray, str]]:
     """
     Tiền xử lý ảnh ROI (Region of Interest) của biển số
-    Trả về nhiều phiên bản xử lý khác nhau để OCR thử nghiệm.
-    
-    Args:
-        roi: Ảnh vùng biển số (numpy array)
-        apply_warping: Có áp dụng warping hay không
-        
-    Returns:
-        List các tuple (image, method_name)
+    ...
     """
     variants = []
     
