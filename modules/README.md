@@ -93,10 +93,9 @@ plate_info = ocr.process_plate(roi)
 
 Ví dụ sử dụng:
 ```python
-from modules.preprocessing import preprocess_for_ocr, enhance_contrast
+from modules.preprocessing import preprocess_for_ocr
 
 preprocessed = preprocess_for_ocr(roi)
-enhanced = enhance_contrast(preprocessed)
 ```
 
 ### 6. `utils.py` - Module Hỗ trợ
