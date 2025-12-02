@@ -136,8 +136,19 @@ class LicensePlateDetector:
             else:
                 box_color = color
             
-            # Vẽ bounding box
-            cv2.rectangle(image_copy, (x1, y1), (x2, y2), box_color, thickness)
+            # Tính toán scale dựa trên kích thước ảnh
+            img_h, img_w = image_copy.shape[:2]
+            
+            # Scale factor: chuẩn hóa theo chiều rộng 640px (kích thước chuẩn của YOLO)
+            # Nếu ảnh rộng 640px -> scale = 1.0
+            # Nếu ảnh rộng 1920px -> scale = 3.0
+            scale_factor = max(1.0, img_w / 640.0)
+            
+            # Tính độ dày nét vẽ động
+            dynamic_thickness = max(2, int(thickness * scale_factor))
+            
+            # Vẽ bounding box với độ dày động
+            cv2.rectangle(image_copy, (x1, y1), (x2, y2), box_color, dynamic_thickness)
             
             # Vẽ text nếu có
             if text:
@@ -148,8 +159,12 @@ class LicensePlateDetector:
                 if num_detections > 1:
                     display_text = f"#{i+1} {display_text}"
                 
+                # Tính font scale và độ dày chữ động
+                dynamic_font_scale = max(1.2, TEXT_FONT_SCALE * scale_factor * 1.8)
+                dynamic_text_thickness = max(2, int(TEXT_THICKNESS * scale_factor))
+
                 # Tính kích thước chữ để vẽ nền
-                (w, h), _ = cv2.getTextSize(display_text, cv2.FONT_HERSHEY_SIMPLEX, TEXT_FONT_SCALE, TEXT_THICKNESS)
+                (w, h), _ = cv2.getTextSize(display_text, cv2.FONT_HERSHEY_SIMPLEX, dynamic_font_scale, dynamic_text_thickness)
                 
                 # Tính toán vị trí vẽ text
                 text_x = x1
@@ -160,16 +175,16 @@ class LicensePlateDetector:
                     text_y = y2 + h + 10
                     
                 # Nếu text bị che ở cạnh phải (x1 + w quá lớn) -> dời sang trái
-                img_h, img_w = image_copy.shape[:2]
                 if text_x + w > img_w:
                     text_x = img_w - w - 5
                 
                 # Vẽ nền cho text
                 # Điều chỉnh tọa độ nền dựa trên vị trí text_y
-                cv2.rectangle(image_copy, (text_x, text_y - h - 5), (text_x + w, text_y + 5), box_color, -1)
+                padding = int(5 * scale_factor)
+                cv2.rectangle(image_copy, (text_x, text_y - h - padding), (text_x + w, text_y + padding), box_color, -1)
                 
                 # Vẽ text
                 cv2.putText(image_copy, display_text, (text_x, text_y),
-                           cv2.FONT_HERSHEY_SIMPLEX, TEXT_FONT_SCALE, (255, 255, 255), TEXT_THICKNESS)
+                           cv2.FONT_HERSHEY_SIMPLEX, dynamic_font_scale, (255, 255, 255), dynamic_text_thickness)
         
         return image_copy

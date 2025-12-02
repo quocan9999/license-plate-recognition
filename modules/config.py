@@ -8,7 +8,7 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Đường dẫn Model
-MODEL_PATH = "models/best.pt"
+MODEL_PATH = "models/best_yolov8n.pt"
 FALLBACK_MODEL_PATH = "yolov8n.pt"
 
 # Thư mục lưu lịch sử
@@ -40,7 +40,7 @@ COLOR_MOTO = (0, 255, 0)         # Green
 COLOR_CAR = (0, 165, 255)        # Orange
 BBOX_THICKNESS = 3
 TEXT_FONT_SCALE = 0.8
-TEXT_THICKNESS = 2
+TEXT_THICKNESS = 4
 
 # --- UTILS SETTINGS ---
 VALID_PROVINCE_START = 11
