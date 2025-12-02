@@ -6,10 +6,11 @@ import numpy as np
 import os
 import platform
 import subprocess
+import re
+from tkinterdnd2 import DND_FILES, TkinterDnD
 from modules.detection import LicensePlateDetector
 from modules.ocr import LicensePlateOCR
 from modules.logger import HistoryLogger
-
 
 class MultiPlateApp:
     def __init__(self, root):
@@ -21,6 +22,10 @@ class MultiPlateApp:
             self.root.state('zoomed')  # Dành cho Windows
         except:
             self.root.attributes('-zoomed', True)  # Dành cho Linux/Mac
+
+        # Cấu hình Drag & Drop
+        self.root.drop_target_register(DND_FILES)
+        self.root.dnd_bind('<<Drop>>', self.drop_files)
 
         # Khởi tạo detector và OCR (EasyOCR với Warping)
         self.detector = LicensePlateDetector()
@@ -37,8 +42,9 @@ class MultiPlateApp:
                                     command=self.select_images,
                                     font=("Arial", 14, "bold"), bg="#4CAF50", fg="white", padx=20, pady=5)
         self.btn_select.pack()
-
-        tk.Label(self.top_frame, text="(Mẹo: Click đúp vào ảnh để mở xem chi tiết | Sử dụng EasyOCR + Warping)", 
+        
+        # Label hướng dẫn thêm Drag & Drop
+        tk.Label(self.top_frame, text="(Mẹo: Kéo thả ảnh vào đây hoặc Click đúp vào ảnh để mở xem chi tiết)", 
                  bg="#f0f0f0",
                  font=("Arial", 10, "italic")).pack()
 
@@ -69,6 +75,27 @@ class MultiPlateApp:
 
         self.canvas.bind_all("<MouseWheel>", _on_mousewheel)
         self.canvas.bind_all("<Shift-MouseWheel>", _on_shift_mousewheel)
+
+    def drop_files(self, event):
+        """Xử lý sự kiện kéo thả file"""
+        file_paths = self.parse_drop_files(event.data)
+        if file_paths:
+            self.process_batch(file_paths)
+
+    def parse_drop_files(self, data):
+        """Phân tích chuỗi dữ liệu từ sự kiện drop"""
+        # Regex để tách các đường dẫn (xử lý cả đường dẫn có khoảng trắng trong {})
+        pattern = r'\{.*?\}|\S+'
+        matches = re.findall(pattern, data)
+        
+        cleaned_paths = []
+        for match in matches:
+            # Loại bỏ dấu {} nếu có
+            path = match.strip('{}')
+            if os.path.isfile(path): # Chỉ lấy file tồn tại
+                cleaned_paths.append(path)
+        
+        return cleaned_paths
 
     def select_images(self):
         file_paths = filedialog.askopenfilenames(
@@ -240,6 +267,6 @@ class MultiPlateApp:
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    root = TkinterDnD.Tk()
     app = MultiPlateApp(root)
     root.mainloop()
