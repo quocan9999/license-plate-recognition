@@ -229,6 +229,8 @@ class MultiPlateApp:
                 traceback.print_exc()
 
             self.root.update()
+        
+        print("\nĐã nhận diện xong!")
 
     def resize_image(self, img_pil, fixed_height):
         # Hàm resize giữ nguyên tỉ lệ
