@@ -4,3 +4,4 @@ easyocr
 opencv-python
 numpy
 Pillow
+tkinterdnd2
