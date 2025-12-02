@@ -103,13 +103,34 @@ def apply_clahe(image):
         return clahe.apply(image)
 
 
+def apply_threshold(image, method='otsu'):
+    """
+    Áp dụng phân ngưỡng (Thresholding) để chuyển sang ảnh nhị phân.
+    Giúp tách chữ khỏi nền nhiễu.
+    """
+    if len(image.shape) == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image
+        
+    if method == 'otsu':
+        # Otsu's binarization
+        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        return thresh
+    elif method == 'adaptive':
+        # Adaptive thresholding
+        return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    return gray
+
 def apply_super_resolution(image, scale=UPSCALE_SCALE):
     """
     Phóng to ảnh (Upscaling) dùng Bicubic Interpolation.
-    Giúp EasyOCR nhận diện tốt hơn với text nhỏ.
+    Chỉ nên dùng khi ảnh quá nhỏ (< 64px cao).
     """
-    # Sử dụng Bicubic cho chất lượng tốt hơn Linear
-    return cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    h, w = image.shape[:2]
+    if h < 64: # Chỉ upscale nếu ảnh nhỏ
+        return cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+    return image
 
 
 def detect_and_warp_plate(roi):
@@ -156,6 +177,22 @@ def detect_and_warp_plate(roi):
             approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
             
             if len(approx) == 4:
+                # Validate contour
+                # 1. Kiểm tra diện tích (phải chiếm ít nhất 10% diện tích ROI)
+                roi_area = h * w
+                cnt_area = cv2.contourArea(contour)
+                if cnt_area < 0.1 * roi_area:
+                    continue
+                
+                # 2. Kiểm tra Aspect Ratio của bounding rect
+                (bx, by, bw, bh) = cv2.boundingRect(approx)
+                aspect_ratio = bw / float(bh)
+                
+                # Biển số thường có AR từ 1.0 (vuông) đến 4.5 (dài)
+                # Cho phép range rộng hơn một chút để tránh bỏ sót
+                if aspect_ratio < 0.5 or aspect_ratio > 6.0:
+                    continue
+                
                 plate_contour = approx
                 break
     
@@ -179,44 +216,56 @@ def detect_and_warp_plate(roi):
 def preprocess_for_ocr(roi, apply_warping=True):
     """
     Tiền xử lý ảnh ROI (Region of Interest) của biển số
-    Pipeline: Warping -> Grayscale -> CLAHE -> Super-Resolution
+    Trả về nhiều phiên bản xử lý khác nhau để OCR thử nghiệm.
     
     Args:
         roi: Ảnh vùng biển số (numpy array)
         apply_warping: Có áp dụng warping hay không
         
     Returns:
-        Ảnh đã được tiền xử lý
+        List các tuple (image, method_name)
     """
-    method_str = []
-    processed = roi
+    variants = []
     
-    intermediates = {}
-    
-    # 1. Warping
+    # 1. Warping (Nếu được yêu cầu)
+    warped_roi = None
     if apply_warping:
-        processed, method = detect_and_warp_plate(roi)
+        warped, method = detect_and_warp_plate(roi)
         if method == "warped":
-            method_str.append("warped")
-            intermediates["warped"] = processed.copy()
+            warped_roi = warped
+            # Thêm bản Warped + Gray
+            if len(warped.shape) == 3:
+                warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+            else:
+                warped_gray = warped
+            variants.append((warped_gray, "warped_gray"))
+            
+            # Thêm bản Warped + Otsu
+            warped_otsu = apply_threshold(warped_gray, 'otsu')
+            variants.append((warped_otsu, "warped_otsu"))
+
+    # 2. Original (Gray)
+    if len(roi.shape) == 3:
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = roi
+    variants.append((gray, "gray"))
     
-    # 2. Grayscale (EasyOCR hoạt động tốt trên Gray/Binary)
-    if len(processed.shape) == 3:
-        processed = cv2.cvtColor(processed, cv2.COLOR_BGR2GRAY)
-        method_str.append("gray")
-        intermediates["gray"] = processed.copy()
+    # 3. Gray + Otsu (Quan trọng cho ảnh nhiễu/mờ)
+    otsu = apply_threshold(gray, 'otsu')
+    variants.append((otsu, "gray_otsu"))
     
-    # 3. CLAHE (Cân bằng sáng)
-    processed = apply_clahe(processed)
-    method_str.append("clahe")
-    intermediates["clahe"] = processed.copy()
+    # 4. Gray + CLAHE (Cho ảnh tối/bóng)
+    clahe = apply_clahe(gray)
+    variants.append((clahe, "gray_clahe"))
     
-    # 4. Super-Resolution (Phóng to)
-    processed = apply_super_resolution(processed, scale=UPSCALE_SCALE)
-    method_str.append("upscale")
-    intermediates["upscale"] = processed.copy()
-    
-    return processed, "+".join(method_str), intermediates
+    # 5. Upscale (Chỉ nếu ảnh quá nhỏ)
+    # Lưu ý: apply_super_resolution giờ đã có check kích thước bên trong
+    upscaled = apply_super_resolution(gray)
+    if upscaled.shape != gray.shape:
+        variants.append((upscaled, "gray_upscale"))
+
+    return variants
 
 
 # def apply_adaptive_threshold(gray_image):

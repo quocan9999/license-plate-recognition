@@ -26,7 +26,8 @@ dict_char_to_num = {
 dict_num_to_char = {
     '0': 'D', '1': 'I', '2': 'Z',
     '3': 'B', '4': 'A', '5': 'S',
-    '6': 'G', '8': 'B',
+    '6': 'G', '8': 'B', '7': 'T',
+    '9': 'P' # Optional but helpful
 }
 
 
@@ -86,7 +87,13 @@ def classify_vehicle(ocr_list):
             else:
                 # Ô tô 2 dòng: 37A / 555.55
                 # Dòng 1 chỉ có 3 ký tự (NN + L)
-                return "Ô TÔ"
+                # Tuy nhiên, nếu L không phải là A, B, C, D (các series ô tô phổ biến),
+                # thì khả năng cao là Xe máy bị nhận diện thiếu số (ví dụ: 59-V3 -> 59-V)
+                series_char = line1_clean[-1]
+                if series_char in ['A', 'B', 'C', 'D']:
+                    return "Ô TÔ"
+                else:
+                    return "XE MÁY"
 
     return "KHÔNG RÕ"
 

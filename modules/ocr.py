@@ -28,82 +28,105 @@ class LicensePlateOCR:
         self.reader = easyocr.Reader(languages, gpu=gpu)
         print(f"✓ Đã khởi tạo EasyOCR (GPU: {gpu}) với Warping")
     
-    def read_text(self, image, detail=0):
+    def read_text(self, image, detail=1):
         """
         Đọc text từ ảnh sử dụng EasyOCR
         
         Args:
             image: Ảnh đầu vào (numpy array)
-            detail: 0 = chỉ text, 1 = full detail
+            detail: 0 = chỉ text, 1 = full detail (bbox, text, conf)
             
         Returns:
-            List các dòng text đã nhận diện
+            List kết quả
         """
         return self.reader.readtext(image, detail=detail)
     
-    def process_plate(self, roi, apply_warping=True):
+    def _process_ocr_result(self, ocr_output, preprocessed, method, intermediates):
         """
-        Xử lý và nhận diện biển số từ ROI
-        
-        Args:
-            roi: Ảnh vùng biển số (numpy array)
-            apply_warping: Có áp dụng warping (nắn thẳng) hay không
+        Xử lý kết quả raw từ EasyOCR -> plate_info
+        """
+        if len(ocr_output) == 0:
+            return None, 0.0
             
-        Returns:
-            Dict chứa thông tin biển số:
-                - raw_text: Text thô từ OCR
-                - vehicle_type: Loại xe
-                - clean_text: Text đã sửa lỗi
-                - formatted_text: Text đã format
-                - is_50cc: Có phải xe máy 50cc không
-        """
-        # Tiền xử lý ảnh (bao gồm warping nếu apply_warping=True)
-        preprocessed, method, intermediates = preprocess_for_ocr(roi, apply_warping=apply_warping)
-        
-        # OCR với EasyOCR
-        ocr_result = self.read_text(preprocessed, detail=0)
-        
-        if len(ocr_result) == 0:
-            return None
+        # Tách text và confidence
+        # ocr_output format: [[bbox, text, conf], ...]
+        text_lines = [item[1] for item in ocr_output]
+        confidences = [item[2] for item in ocr_output]
+        avg_conf = sum(confidences) / len(confidences) if confidences else 0.0
         
         # Phân loại loại xe
-        vehicle_type = classify_vehicle(ocr_result)
+        vehicle_type = classify_vehicle(text_lines)
         
         # Kiểm tra xe máy 50cc
         is_50cc = False
         if vehicle_type == "XE MÁY":
-            line1 = ocr_result[0]
+            line1 = text_lines[0]
             line1_clean = re.sub(r'[^A-Z0-9]', '', line1.upper())
-            # Nếu dòng 1 kết thúc bằng chữ và dài >= 4 -> xe máy 50cc
             if len(line1_clean) >= 4 and not line1_clean[-1].isdigit():
                 is_50cc = True
         
         # Ghép và sửa lỗi
-        raw_text = "".join(ocr_result)
+        raw_text = "".join(text_lines)
         clean_text = fix_plate_chars(raw_text, is_50cc=is_50cc)
         formatted_text = format_plate(clean_text, vehicle_type)
         
-        return {
+        plate_info = {
             'raw_text': raw_text,
             'vehicle_type': vehicle_type,
             'clean_text': clean_text,
             'formatted_text': formatted_text,
             'is_50cc': is_50cc,
-            'ocr_lines': ocr_result,
+            'ocr_lines': text_lines,
             'preprocessed_image': preprocessed,
             'preprocessing_method': method,
-            'intermediate_images': intermediates
+            'intermediate_images': intermediates,
+            'confidence': avg_conf
         }
+        
+        return plate_info, avg_conf
+
+    def process_plate(self, roi, apply_warping=True):
+        """
+        Xử lý và nhận diện biển số từ ROI
+        Chiến lược: Multi-Hypothesis (Thử nhiều cách tiền xử lý và chọn kết quả tốt nhất)
+        """
+        # Lấy danh sách các phiên bản ảnh đã tiền xử lý
+        variants = preprocess_for_ocr(roi, apply_warping=apply_warping)
+        
+        candidates = []
+        
+        for image, method in variants:
+            # OCR
+            ocr_output = self.read_text(image, detail=1)
+            
+            # Xử lý kết quả
+            # Lưu ý: intermediates giờ không còn trả về từ preprocess_for_ocr, 
+            # nên ta truyền dict rỗng hoặc tạo dict chứa ảnh hiện tại để debug
+            intermediates = {method: image}
+            
+            plate_info, conf = self._process_ocr_result(ocr_output, image, method, intermediates)
+            
+            if plate_info and self.is_valid_plate(plate_info):
+                candidates.append(plate_info)
+                
+        # Chọn kết quả tốt nhất
+        if not candidates:
+            return None
+            
+        # Sắp xếp theo confidence giảm dần
+        candidates.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        best_result = candidates[0]
+        
+        # Log debug
+        if len(candidates) > 1:
+            print(f"Selected '{best_result['preprocessing_method']}' ({best_result['confidence']:.2f}) from {len(candidates)} candidates.")
+            
+        return best_result
     
     def is_valid_plate(self, plate_info):
         """
         Kiểm tra biển số có hợp lệ không
-        
-        Args:
-            plate_info: Dict thông tin biển số từ process_plate()
-            
-        Returns:
-            True nếu hợp lệ, False nếu không
         """
         if plate_info is None:
             return False
@@ -118,5 +141,5 @@ class LicensePlateOCR:
         vehicle_type = plate_info.get('vehicle_type', '')
         if vehicle_type == "KHÔNG RÕ":
             return False
-        
+            
         return True

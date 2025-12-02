@@ -80,7 +80,9 @@ class LicensePlateDetector:
 
         
         # Thực hiện detection
-        results = self.model(image_np)
+        # Thêm conf=0.25 để lọc các box có độ tin cậy thấp
+        # Thêm classes=[0] để chỉ nhận diện class 0 (biển số)
+        results = self.model(image_np, conf=0.25, classes=[0])
         return results
     
     def get_plate_regions(self, image):
