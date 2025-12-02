@@ -70,6 +70,15 @@ class LicensePlateDetector:
         else:
             image_np = image
         
+        # Kiểm tra nếu ảnh là grayscale (2 chiều) -> convert sang RGB
+        if len(image_np.shape) == 2:
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_GRAY2RGB)
+        # Kiểm tra nếu ảnh có 4 kênh (RGBA) -> convert sang RGB
+        elif image_np.shape[2] == 4:
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
+        
+
+        
         # Thực hiện detection
         results = self.model(image_np)
         return results
@@ -91,6 +100,13 @@ class LicensePlateDetector:
             image_np = np.array(image)
         else:
             image_np = image
+            
+        # Kiểm tra nếu ảnh là grayscale (2 chiều) -> convert sang RGB
+        if len(image_np.shape) == 2:
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_GRAY2RGB)
+        # Kiểm tra nếu ảnh có 4 kênh (RGBA) -> convert sang RGB
+        elif image_np.shape[2] == 4:
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
         
         results = self.detect(image_np)
         plate_regions = []
