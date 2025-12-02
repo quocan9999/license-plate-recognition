@@ -14,12 +14,13 @@ VALID_PROVINCE_CODES = set(range(VALID_PROVINCE_START, VALID_PROVINCE_END))  # 1
 dict_char_to_num = {
     'I': '1', 'L': '1', 'T': '1',
     'O': '0', 'Q': '0', 'D': '0', 'U': '0',
-    'B': '8', 'E': '8',
+    'B': '8', 'E': '8', 'R': '8',
     'S': '5', 'F': '5',
-    'Z': '2', 'R': '2',
+    'Z': '2', 
     'G': '6', 'C': '6',
-    'A': '4', 'L': '4',
+    'A': '4',
     'J': '3',
+    'Y': '7',
 }
 
 # Mapping: Số -> Chữ (dùng cho vị trí phải là CHỮ)
@@ -198,54 +199,55 @@ def format_plate(text, vehicle_type):
     - XE MÁY: NN-LN NNNN  (ví dụ: 29-A1 4264)
     
     Args:
-        text: Text biển số đã được sửa lỗi
+        text: Text biển số đã được sửa lỗi (chỉ gồm A-Z, 0-9)
         vehicle_type: Loại xe ("XE MÁY" hoặc "Ô TÔ")
         
     Returns:
         Text biển số đã được format
     """
-    # Giới hạn độ dài
+    # Giới hạn độ dài tối đa
     if len(text) > 9: 
         text = text[:9]
     
     if vehicle_type == "XE MÁY":
-        # Xe máy 50cc
-        if len(text) >= 6 and not text[3].isdigit():
-            # 29AA12345 -> 29-AA 123.45 (9 ký tự - biển mới)
+        # Xe máy 50cc (NN-LL...)
+        # Ví dụ: 29AA12345
+        if len(text) >= 4 and not text[3].isdigit():
+            # Biển 5 số: 29AA12345 -> 29-AA 123.45 (9 ký tự)
             if len(text) == 9:
                 return f"{text[:2]}-{text[2:4]} {text[4:7]}.{text[7:]}"
-            # 29AA1234 -> 29-AA 1234 (8 ký tự - biển cũ)
+            # Biển 4 số: 29AA1234 -> 29-AA 1234 (8 ký tự)
             elif len(text) == 8:
                 return f"{text[:2]}-{text[2:4]} {text[4:]}"
             else:
+                # Fallback cho độ dài lạ
                 return f"{text[:2]}-{text[2:4]} {text[4:]}"
         
-        # Xe máy thường
+        # Xe máy thường (NN-LN...)
+        # Ví dụ: 29A112345
         else:
-            # 29A112345 -> 29-A1 123.45 (9 ký tự - biển mới)
+            # Biển 5 số: 29A112345 -> 29-A1 123.45 (9 ký tự)
             if len(text) == 9:
                 return f"{text[:2]}-{text[2:4]} {text[4:7]}.{text[7:]}"
-            # 29A11234 -> 29-A1 1234 (8 ký tự - biển cũ)
+            # Biển 4 số: 29A11234 -> 29-A1 1234 (8 ký tự)
             elif len(text) == 8:
                 return f"{text[:2]}-{text[2:4]} {text[4:]}"
-            # 29A1123 -> 29-A1 123 (7 ký tự - biển cũ thiếu)
-            elif len(text) == 7:
-                return f"{text[:2]}-{text[2:4]} {text[4:]}"
-            # Độ dài khác
+            # Trường hợp thiếu số nhưng vẫn format tạm
             elif len(text) >= 6:
                 return f"{text[:2]}-{text[2:4]} {text[4:]}"
 
     else:  # Ô TÔ
-        # 30A12345 -> 30A-123.45 (8 ký tự - biển mới)
+        # Biển 5 số: 30A12345 -> 30A-123.45 (8 ký tự)
         if len(text) == 8:
             return f"{text[:2]}{text[2]}-{text[3:6]}.{text[6:]}"
         
-        # 30A1234 -> 30A-4264 (7 ký tự - biển cũ)
+        # Biển 4 số: 30A1234 -> 30A-4264 (7 ký tự)
         elif len(text) == 7:
             return f"{text[:2]}{text[2]}-{text[3:]}"
         
-        # 30A123456 -> 30A-123.45 (9 ký tự - cắt bớt)
-        elif len(text) == 9:
+        # Trường hợp thừa ký tự (ví dụ đọc nhầm) -> Cắt về 5 số
+        elif len(text) >= 9:
+            # Lấy 8 ký tự đầu tiên hợp lệ nhất
             return f"{text[:2]}{text[2]}-{text[3:6]}.{text[6:8]}"
 
     return text
