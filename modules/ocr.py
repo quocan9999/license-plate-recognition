@@ -39,7 +39,10 @@ class LicensePlateOCR:
         Returns:
             List kết quả
         """
-        return self.reader.readtext(image, detail=detail)
+        # Thêm allowlist để giới hạn ký tự, giảm thiểu nhận diện sai
+        # Chỉ cho phép A-Z và 0-9, loại bỏ các ký tự đặc biệt
+        allowlist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        return self.reader.readtext(image, detail=detail, allowlist=allowlist)
     
     def _process_ocr_result(self, ocr_output, preprocessed, method, intermediates):
         """
