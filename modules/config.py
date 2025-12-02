@@ -8,8 +8,8 @@ import os
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Đường dẫn Model
-MODEL_PATH = "models/best_yolov8n.pt"
-FALLBACK_MODEL_PATH = "yolov8n.pt"
+MODEL_PATH = "models/best_yolov8l_new.pt"
+FALLBACK_MODEL_PATH = "yolov8l.pt"
 
 # Thư mục lưu lịch sử
 HISTORY_DIR = "History"
