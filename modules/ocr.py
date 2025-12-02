@@ -5,6 +5,8 @@ Sử dụng EasyOCR với Warping (nắn thẳng biển số)
 
 
 import re
+from typing import List, Dict, Tuple, Optional, Any
+import numpy as np
 import easyocr
 from .preprocessing import preprocess_for_ocr
 from .utils import classify_vehicle, fix_plate_chars, format_plate
@@ -17,7 +19,7 @@ class LicensePlateOCR:
     Sử dụng EasyOCR với Warping
     """
     
-    def __init__(self, languages=OCR_LANGUAGES, gpu=OCR_GPU):
+    def __init__(self, languages: List[str] = OCR_LANGUAGES, gpu: bool = OCR_GPU):
         """
         Khởi tạo EasyOCR reader
         
@@ -28,7 +30,7 @@ class LicensePlateOCR:
         self.reader = easyocr.Reader(languages, gpu=gpu)
         print(f"✓ Đã khởi tạo EasyOCR (GPU: {gpu}) với Warping")
     
-    def read_text(self, image, detail=1):
+    def read_text(self, image: np.ndarray, detail: int = 1) -> List[Any]:
         """
         Đọc text từ ảnh sử dụng EasyOCR
         
@@ -41,7 +43,7 @@ class LicensePlateOCR:
         """
         return self.reader.readtext(image, detail=detail)
     
-    def _process_ocr_result(self, ocr_output, preprocessed, method, intermediates):
+    def _process_ocr_result(self, ocr_output: List[Any], preprocessed: np.ndarray, method: str, intermediates: Dict[str, np.ndarray]) -> Tuple[Optional[Dict[str, Any]], float]:
         """
         Xử lý kết quả raw từ EasyOCR -> plate_info
         """
@@ -85,7 +87,7 @@ class LicensePlateOCR:
         
         return plate_info, avg_conf
 
-    def process_plate(self, roi, apply_warping=True):
+    def process_plate(self, roi: np.ndarray, apply_warping: bool = True) -> Optional[Dict[str, Any]]:
         """
         Xử lý và nhận diện biển số từ ROI
         Chiến lược: Multi-Hypothesis (Thử nhiều cách tiền xử lý và chọn kết quả tốt nhất)
@@ -124,7 +126,7 @@ class LicensePlateOCR:
             
         return best_result
     
-    def is_valid_plate(self, plate_info):
+    def is_valid_plate(self, plate_info: Optional[Dict[str, Any]]) -> bool:
         """
         Kiểm tra biển số có hợp lệ không
         """

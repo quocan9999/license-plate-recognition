@@ -4,6 +4,7 @@ Bao gồm: validation, formatting, character mapping, và phân loại xe
 """
 
 import re
+from typing import List, Dict, Set
 from .config import VALID_PROVINCE_START, VALID_PROVINCE_END
 
 # --- MÃ TỈNH THÀNH VIỆT NAM (11-99) ---
@@ -31,7 +32,7 @@ dict_num_to_char = {
 }
 
 
-def classify_vehicle(ocr_list):
+def classify_vehicle(ocr_list: List[str]) -> str:
     """
     Phân loại Xe máy vs Ô tô
     
@@ -98,7 +99,7 @@ def classify_vehicle(ocr_list):
     return "KHÔNG RÕ"
 
 
-def validate_province_code(code_str):
+def validate_province_code(code_str: str) -> bool:
     """
     Kiểm tra mã tỉnh có hợp lệ không (11-99)
     
@@ -115,7 +116,7 @@ def validate_province_code(code_str):
         return False
 
 
-def fix_plate_chars(raw_text, is_50cc=False):
+def fix_plate_chars(raw_text: str, is_50cc: bool = False) -> str:
     """
     Sửa lỗi ký tự dựa trên pattern biển số Việt Nam
     
@@ -184,7 +185,7 @@ def fix_plate_chars(raw_text, is_50cc=False):
     return "".join(chars)
 
 
-def format_plate(text, vehicle_type):
+def format_plate(text: str, vehicle_type: str) -> str:
     """
     Format biển số theo chuẩn Việt Nam
     
