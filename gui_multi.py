@@ -7,6 +7,7 @@ import os
 import platform
 import subprocess
 import re
+import threading
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from modules.detection import LicensePlateDetector
 from modules.ocr import LicensePlateOCR
@@ -52,6 +53,10 @@ class MultiPlateApp:
                                      command=self.open_history_folder,
                                      font=("Arial", 14, "bold"), bg="#FF9800", fg="white", padx=20, pady=5)
         self.btn_history.pack(side="left", padx=10)
+        
+        # Label trạng thái xử lý
+        self.lbl_status = tk.Label(self.top_frame, text="", font=("Arial", 12, "bold"), fg="blue", bg="#f0f0f0")
+        self.lbl_status.pack(pady=5)
         
         # Label hướng dẫn thêm Drag & Drop
         tk.Label(self.top_frame, text="(Mẹo: Kéo thả ảnh vào đây hoặc Click đúp vào ảnh để mở xem chi tiết)", 
@@ -198,91 +203,124 @@ class MultiPlateApp:
         return processed_image, detected_plates, detections
 
     def process_batch(self, file_paths):
+        """Bắt đầu xử lý batch trong thread riêng"""
+        # 1. Xóa kết quả cũ trên UI
         for widget in self.scrollable_frame.winfo_children():
             widget.destroy()
         self.image_refs = []
+        
+        # 2. Cập nhật trạng thái UI
+        self.btn_select.config(state="disabled")
+        self.btn_history.config(state="disabled")
+        self.lbl_status.config(text="Đang khởi tạo...", fg="blue")
+        
+        # 3. Chạy thread xử lý
+        threading.Thread(target=self.processing_thread, args=(file_paths,), daemon=True).start()
 
+    def processing_thread(self, file_paths):
+        """Hàm thực thi trong background thread"""
+        total = len(file_paths)
+        
         for index, file_path in enumerate(file_paths):
-            stt = index + 1
-
-            # Khung chứa 1 dòng
-            row_frame = tk.Frame(self.scrollable_frame, bg="white", bd=2, relief="groove")
-            row_frame.pack(fill="x", padx=10, pady=10)
-
-            # Header
-            lbl_header = tk.Label(row_frame, text=f"Hồ sơ ảnh #{stt}", font=("Arial", 11, "bold"), bg="#ddd",
-                                  anchor="w", padx=10)
-            lbl_header.pack(fill="x")
-
-            content_frame = tk.Frame(row_frame, bg="white")
-            content_frame.pack(pady=10)
-
+            # Cập nhật thông báo trạng thái
+            msg = f"Đang xử lý ảnh {index+1}/{total}..."
+            self.root.after(0, lambda: self.lbl_status.config(text=msg))
+            
             try:
+                # Xử lý nặng (Detect + OCR)
                 img_pil = Image.open(file_path)
                 processed_img_np, plates, detections = self.process_and_predict(img_pil)
                 
                 result_pil = Image.fromarray(processed_img_np)
                 
-                # Lưu kết quả vào History (bao gồm ảnh toàn cảnh đã vẽ bbox)
+                # Lưu kết quả vào History
                 self.logger.save_result(file_path, img_pil, detections, processed_image_pil=result_pil)
                 
-                # --- CỘT 1: ẢNH GỐC ---
-                col1 = tk.Frame(content_frame, bg="white")
-                col1.grid(row=0, column=0, padx=20)
-
-                # Resize to hơn (450px)
-                thumb_orig = self.resize_image(img_pil, fixed_height=450)
-                tk_thumb_orig = ImageTk.PhotoImage(thumb_orig)
-                self.image_refs.append(tk_thumb_orig)
-
-                lbl_img1 = tk.Label(col1, image=tk_thumb_orig, cursor="hand2")
-                lbl_img1.pack()
-                # Gán sự kiện Click đúp -> Mở ảnh gốc full size
-                lbl_img1.bind("<Double-Button-1>", lambda e, path=file_path: self.open_image_external(e, path))
-
-                tk.Label(col1, text="Ảnh gốc (Click đúp để phóng to)", font=("Arial", 10, "italic"), bg="white").pack()
-
-                # --- CỘT 2: ẢNH XỬ LÝ ---
-                col2 = tk.Frame(content_frame, bg="white")
-                col2.grid(row=0, column=1, padx=20)
-
-                thumb_res = self.resize_image(result_pil, fixed_height=450)
-                tk_thumb_res = ImageTk.PhotoImage(thumb_res)
-                self.image_refs.append(tk_thumb_res)
-
-                tk.Label(col2, image=tk_thumb_res).pack()
-                tk.Label(col2, text="Ảnh đã nhận diện", font=("Arial", 10, "italic"), bg="white").pack()
-
-                # --- CỘT 3: KẾT QUẢ ---
-                col3 = tk.Frame(content_frame, bg="white")
-                col3.grid(row=0, column=2, padx=30, sticky="n")  # Sticky n để chữ nằm phía trên
-
-                # Tạo khoảng trống phía trên để chữ ngang tầm mắt hơn
-                tk.Frame(col3, height=50, bg="white").pack()
-
-                if plates:
-                    result_text = ""
-                    for p in plates:
-                        if "]" in p:
-                            type_part, number_part = p.split("]", 1)
-                            type_clean = type_part.replace("[", "")
-                            result_text += f"{type_clean} - {number_part.strip()}\n"
-                        else:
-                            result_text += f"{p}\n"
-
-                    tk.Label(col3, text=result_text, font=("Arial", 20, "bold"), fg="#2E7D32", bg="white",
-                             justify="left").pack()
-                else:
-                    tk.Label(col3, text="Không tìm thấy\nbiển số", font=("Arial", 16), fg="red", bg="white").pack()
-
+                # Cập nhật UI (gửi về Main Thread)
+                self.root.after(0, self.add_result_row, index, file_path, img_pil, result_pil, plates)
+                
             except Exception as e:
-                print(f"Lỗi: {e}")
+                print(f"Lỗi xử lý file {file_path}: {e}")
                 import traceback
                 traceback.print_exc()
 
-            self.root.update()
-        
+        # Hoàn tất
+        self.root.after(0, self.on_processing_finished)
+
+    def on_processing_finished(self):
+        """Được gọi khi thread xử lý xong"""
+        self.lbl_status.config(text="Đã nhận diện xong!", fg="green")
+        self.btn_select.config(state="normal")
+        self.btn_history.config(state="normal")
         print("\nĐã nhận diện xong!")
+
+    def add_result_row(self, index, file_path, img_pil, result_pil, plates):
+        """Thêm một dòng kết quả vào giao diện (chạy trên Main Thread)"""
+        stt = index + 1
+
+        # Khung chứa 1 dòng
+        row_frame = tk.Frame(self.scrollable_frame, bg="white", bd=2, relief="groove")
+        row_frame.pack(fill="x", padx=10, pady=10)
+
+        # Header
+        lbl_header = tk.Label(row_frame, text=f"Hồ sơ ảnh #{stt}", font=("Arial", 11, "bold"), bg="#ddd",
+                              anchor="w", padx=10)
+        lbl_header.pack(fill="x")
+
+        content_frame = tk.Frame(row_frame, bg="white")
+        content_frame.pack(pady=10)
+
+        # --- CỘT 1: ẢNH GỐC ---
+        col1 = tk.Frame(content_frame, bg="white")
+        col1.grid(row=0, column=0, padx=20)
+
+        # Resize to hơn (450px)
+        thumb_orig = self.resize_image(img_pil, fixed_height=450)
+        tk_thumb_orig = ImageTk.PhotoImage(thumb_orig)
+        self.image_refs.append(tk_thumb_orig)
+
+        lbl_img1 = tk.Label(col1, image=tk_thumb_orig, cursor="hand2")
+        lbl_img1.pack()
+        # Gán sự kiện Click đúp -> Mở ảnh gốc full size
+        lbl_img1.bind("<Double-Button-1>", lambda e, path=file_path: self.open_image_external(e, path))
+
+        tk.Label(col1, text="Ảnh gốc (Click đúp để phóng to)", font=("Arial", 10, "italic"), bg="white").pack()
+
+        # --- CỘT 2: ẢNH XỬ LÝ ---
+        col2 = tk.Frame(content_frame, bg="white")
+        col2.grid(row=0, column=1, padx=20)
+
+        thumb_res = self.resize_image(result_pil, fixed_height=450)
+        tk_thumb_res = ImageTk.PhotoImage(thumb_res)
+        self.image_refs.append(tk_thumb_res)
+
+        tk.Label(col2, image=tk_thumb_res).pack()
+        tk.Label(col2, text="Ảnh đã nhận diện", font=("Arial", 10, "italic"), bg="white").pack()
+
+        # --- CỘT 3: KẾT QUẢ ---
+        col3 = tk.Frame(content_frame, bg="white")
+        col3.grid(row=0, column=2, padx=30, sticky="n")  # Sticky n để chữ nằm phía trên
+
+        # Tạo khoảng trống phía trên để chữ ngang tầm mắt hơn
+        tk.Frame(col3, height=50, bg="white").pack()
+
+        if plates:
+            result_text = ""
+            for p in plates:
+                if "]" in p:
+                    type_part, number_part = p.split("]", 1)
+                    type_clean = type_part.replace("[", "")
+                    result_text += f"{type_clean} - {number_part.strip()}\n"
+                else:
+                    result_text += f"{p}\n"
+
+            tk.Label(col3, text=result_text, font=("Arial", 20, "bold"), fg="#2E7D32", bg="white",
+                     justify="left").pack()
+        else:
+            tk.Label(col3, text="Không tìm thấy\nbiển số", font=("Arial", 16), fg="red", bg="white").pack()
+            
+        # Cập nhật UI ngay lập tức
+        self.root.update_idletasks()
 
     def resize_image(self, img_pil, fixed_height):
         # Hàm resize giữ nguyên tỉ lệ
