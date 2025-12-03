@@ -78,6 +78,8 @@ source .venv/bin/activate
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 ```
+> **Lưu ý:** Nếu bạn muốn sử dụng GPU thì hãy chuyển sang phần `6. Hướng dẫn sử dụng GPU (Nâng cao)`
+
 
 **Bước 4: Cài đặt các thư viện còn lại**
 
@@ -112,6 +114,31 @@ python gui_multi.py
 python clear_history.py
 ```
 *Lưu ý: Bạn sẽ được yêu cầu xác nhận (y/n) trước khi xóa.*
+
+### 6. Hướng dẫn sử dụng GPU (Nâng cao)
+
+Nếu máy tính của bạn có Card màn hình rời **NVIDIA**, bạn có thể kích hoạt chế độ GPU để tăng tốc độ nhận diện lên gấp 10-20 lần.
+
+**Bước 1: Cài đặt PyTorch phiên bản hỗ trợ GPU (CUDA)**
+
+Trước tiên, gỡ phiên bản CPU hiện tại (nếu có):
+```bash
+pip uninstall torch torchvision torchaudio -y
+```
+
+Sau đó, cài đặt phiên bản hỗ trợ CUDA 11.8 (Dung lượng tải về khá lớn, khoảng **2-3GB**):
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+
+**Bước 2: Bật cấu hình GPU**
+
+Mở file `modules/config.py` và sửa dòng sau:
+```python
+OCR_GPU = True  # Đổi từ False sang True
+```
+
+*Lưu ý: Nếu máy không có GPU NVIDIA mà bật True, chương trình sẽ tự động chuyển về CPU nhưng sẽ mất thời gian khởi tạo lâu hơn.*
 
 ## 📝 Ghi chú
 
