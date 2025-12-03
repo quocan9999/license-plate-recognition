@@ -228,43 +228,43 @@ def preprocess_for_ocr(roi: np.ndarray, apply_warping: bool = True) -> List[Tupl
     """
     variants = []
     
-    # 1. Warping (Nếu được yêu cầu)
+    # 1. Warped (Nếu được yêu cầu)
     warped_roi = None
     if apply_warping:
         warped, method = detect_and_warp_plate(roi)
         if method == "warped":
             warped_roi = warped
-            # Thêm bản Warped + Gray
+            # Thêm bản Warped + Gray (Ưu tiên cao nhất)
             if len(warped.shape) == 3:
                 warped_gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
             else:
                 warped_gray = warped
             variants.append((warped_gray, "warped_gray"))
-            
-            # Thêm bản Warped + Otsu
-            warped_otsu = apply_threshold(warped_gray, 'otsu')
-            variants.append((warped_otsu, "warped_otsu"))
 
-    # 2. Original (Gray)
+    # 2. Original (Gray) (Ưu tiên nhì)
     if len(roi.shape) == 3:
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     else:
         gray = roi
     variants.append((gray, "gray"))
     
-    # 3. Gray + Otsu (Quan trọng cho ảnh nhiễu/mờ)
+    # 3. Gray + CLAHE (Cho ảnh tối/bóng - Rất hiệu quả với EasyOCR)
+    clahe = apply_clahe(gray)
+    variants.append((clahe, "gray_clahe"))
+
+    # 4. Các biến thể Otsu (Chỉ dùng khi ảnh xám thất bại)
+    if warped_roi is not None:
+        warped_otsu = apply_threshold(warped_gray, 'otsu')
+        variants.append((warped_otsu, "warped_otsu"))
+        
     otsu = apply_threshold(gray, 'otsu')
     variants.append((otsu, "gray_otsu"))
     
-    # 4. Gray + CLAHE (Cho ảnh tối/bóng)
-    clahe = apply_clahe(gray)
-    variants.append((clahe, "gray_clahe"))
-    
-    # 5. Upscale (Chỉ nếu ảnh quá nhỏ)
+    # 5. Upscale (Chỉ nếu ảnh quá nhỏ - Ưu tiên thấp nhất)
     # Lưu ý: apply_super_resolution giờ đã có check kích thước bên trong
-    upscaled = apply_super_resolution(gray)
-    if upscaled.shape != gray.shape:
-        variants.append((upscaled, "gray_upscale"))
+    # upscaled = apply_super_resolution(gray)
+    # if upscaled.shape != gray.shape:
+    #     variants.append((upscaled, "gray_upscale"))
 
     return variants
 

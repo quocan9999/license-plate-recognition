@@ -136,14 +136,18 @@ class LicensePlateOCR:
             ocr_output = self.read_text(image, detail=1)
             
             # Xử lý kết quả
-            # Lưu ý: intermediates giờ không còn trả về từ preprocess_for_ocr, 
-            # nên ta truyền dict rỗng hoặc tạo dict chứa ảnh hiện tại để debug
             intermediates = {method: image}
             
             plate_info, conf = self._process_ocr_result(ocr_output, image, method, intermediates)
             
             if plate_info and self.is_valid_plate(plate_info):
                 candidates.append(plate_info)
+                
+                # --- EARLY EXIT (Dừng sớm) ---
+                # Nếu độ tin cậy cao (> 0.8), chấp nhận ngay và không thử các phương pháp khác
+                if conf > 0.8:
+                    print(f"⚡ Early exit with '{method}' ({conf:.2f})")
+                    return plate_info
                 
         # Chọn kết quả tốt nhất
         if not candidates:
@@ -155,8 +159,7 @@ class LicensePlateOCR:
         best_result = candidates[0]
         
         # Log debug
-        if len(candidates) > 1:
-            print(f"Selected '{best_result['preprocessing_method']}' ({best_result['confidence']:.2f}) from {len(candidates)} candidates.")
+        print(f"Selected '{best_result['preprocessing_method']}' ({best_result['confidence']:.2f}) from {len(candidates)} candidates.")
             
         return best_result
     
