@@ -12,7 +12,7 @@ MODEL_PATH = "models/yolov8l/yolov8l_dataset_moinhat_lan2.pt"
 FALLBACK_MODEL_PATH = "models/yolov8l/yolov8l_dataset_moinhat_lan1.pt"
 
 # Thư mục lưu lịch sử
-HISTORY_DIR = "History"
+HISTORY_DIR = "history"
 HISTORY_CSV_FILE = "history.csv"
 
 # --- OCR SETTINGS ---

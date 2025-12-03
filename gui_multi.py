@@ -11,6 +11,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 from modules.detection import LicensePlateDetector
 from modules.ocr import LicensePlateOCR
 from modules.logger import HistoryLogger
+from modules.config import HISTORY_DIR
 
 class MultiPlateApp:
     def __init__(self, root):
@@ -38,10 +39,19 @@ class MultiPlateApp:
         self.top_frame = tk.Frame(root, bg="#f0f0f0", pady=10)
         self.top_frame.pack(fill="x")
 
-        self.btn_select = tk.Button(self.top_frame, text="📂 Chọn nhiều ảnh (Batch)",
+        # Frame chứa các nút điều khiển
+        self.btn_frame = tk.Frame(self.top_frame, bg="#f0f0f0")
+        self.btn_frame.pack()
+
+        self.btn_select = tk.Button(self.btn_frame, text="📂 Chọn nhiều ảnh (Batch)",
                                     command=self.select_images,
                                     font=("Arial", 14, "bold"), bg="#4CAF50", fg="white", padx=20, pady=5)
-        self.btn_select.pack()
+        self.btn_select.pack(side="left", padx=10)
+
+        self.btn_history = tk.Button(self.btn_frame, text="📂 Mở thư mục History",
+                                     command=self.open_history_folder,
+                                     font=("Arial", 14, "bold"), bg="#FF9800", fg="white", padx=20, pady=5)
+        self.btn_history.pack(side="left", padx=10)
         
         # Label hướng dẫn thêm Drag & Drop
         tk.Label(self.top_frame, text="(Mẹo: Kéo thả ảnh vào đây hoặc Click đúp vào ảnh để mở xem chi tiết)", 
@@ -104,6 +114,21 @@ class MultiPlateApp:
         )
         if file_paths:
             self.process_batch(file_paths)
+
+    def open_history_folder(self):
+        """Mở thư mục History"""
+        if not os.path.exists(HISTORY_DIR):
+            os.makedirs(HISTORY_DIR)
+            
+        try:
+            if platform.system() == 'Windows':
+                os.startfile(HISTORY_DIR)
+            elif platform.system() == 'Darwin':  # macOS
+                subprocess.call(('open', HISTORY_DIR))
+            else:  # Linux
+                subprocess.call(('xdg-open', HISTORY_DIR))
+        except Exception as e:
+            print(f"Không mở được thư mục history: {e}")
 
     def open_image_external(self, event, file_path):
         """Hàm mở ảnh bằng phần mềm mặc định của hệ thống khi click đúp"""
@@ -196,11 +221,11 @@ class MultiPlateApp:
                 img_pil = Image.open(file_path)
                 processed_img_np, plates, detections = self.process_and_predict(img_pil)
                 
-                # Lưu kết quả vào History
-                self.logger.save_result(file_path, img_pil, detections)
-                
                 result_pil = Image.fromarray(processed_img_np)
-
+                
+                # Lưu kết quả vào History (bao gồm ảnh toàn cảnh đã vẽ bbox)
+                self.logger.save_result(file_path, img_pil, detections, processed_image_pil=result_pil)
+                
                 # --- CỘT 1: ẢNH GỐC ---
                 col1 = tk.Frame(content_frame, bg="white")
                 col1.grid(row=0, column=0, padx=20)

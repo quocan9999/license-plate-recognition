@@ -26,7 +26,7 @@ class HistoryLogger:
         if not os.path.exists(self.base_dir):
             os.makedirs(self.base_dir)
 
-    def save_result(self, original_image_path, original_image_pil, detections):
+    def save_result(self, original_image_path, original_image_pil, detections, processed_image_pil=None):
         """
         Lưu kết quả nhận diện vào thư mục History và ghi log CSV
         
@@ -34,6 +34,7 @@ class HistoryLogger:
             original_image_path: Đường dẫn file ảnh gốc
             original_image_pil: Ảnh gốc (PIL Image)
             detections: Danh sách kết quả nhận diện
+            processed_image_pil: Ảnh toàn cảnh đã vẽ bbox và text (PIL Image)
         """
         try:
             now = datetime.now()
@@ -56,6 +57,13 @@ class HistoryLogger:
             # Lưu ảnh gốc
             original_image_pil.save(save_original_path)
             
+            # Lưu ảnh toàn cảnh đã nhận diện (nếu có)
+            save_detected_full_path = ""
+            if processed_image_pil is not None:
+                save_detected_full_name = f"{timestamp}_{name_no_ext}_detected_full.jpg"
+                save_detected_full_path = os.path.join(save_dir, save_detected_full_name)
+                processed_image_pil.save(save_detected_full_path)
+            
             # File log CSV
             csv_file = os.path.join(self.base_dir, HISTORY_CSV_FILE)
             file_exists = os.path.isfile(csv_file)
@@ -68,7 +76,7 @@ class HistoryLogger:
                 
                 # Nếu không có biển số nào
                 if not detections:
-                     writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), "No Plate", "", save_original_path, "", "", ""])
+                     writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), "No Plate", "", save_original_path, "", "", save_detected_full_path])
                 
                 # 2. Lưu từng biển số cắt được (ROI)
                 for i, det in enumerate(detections):
@@ -92,7 +100,6 @@ class HistoryLogger:
                     
                     # Lưu ảnh Preprocessed (nếu có)
                     save_preprocessed_path = ""
-                    save_detected_path = ""
                     
                     if preprocessed_image is not None:
                         # 1. Lưu ảnh kết quả cuối cùng (processed): ..._processed.jpg
@@ -111,18 +118,8 @@ class HistoryLogger:
                                 if isinstance(step_img, np.ndarray):
                                     Image.fromarray(step_img).save(save_step_path)
                     
-                    # 3. Lưu ảnh đã qua nhận diện (detected image with bbox - nếu có)
-                    # Lưu ý: Hiện tại detection không trả về ảnh với bbox, 
-                    # nếu cần có thể thêm sau
-                    detected_image = det.get('detected_image')
-                    if detected_image is not None:
-                        save_detected_name = f"{timestamp}_{clean_text}_{i}_detected.jpg"
-                        save_detected_path = os.path.join(save_dir, save_detected_name)
-                        if isinstance(detected_image, np.ndarray):
-                            Image.fromarray(detected_image).save(save_detected_path)
-                    
                     # Ghi log vào CSV
-                    # LƯU Ý: Chỉ lưu đường dẫn ảnh processed cuối cùng, không lưu intermediate
+                    # LƯU Ý: Cột cuối cùng là đường dẫn ảnh toàn cảnh (processed_image_pil)
                     writer.writerow([
                         now.strftime("%Y-%m-%d %H:%M:%S"), 
                         plate_text, 
@@ -130,7 +127,7 @@ class HistoryLogger:
                         save_original_path, 
                         save_roi_path, 
                         save_preprocessed_path,
-                        save_detected_path
+                        save_detected_full_path
                     ])
                     
         except Exception as e:
