@@ -51,6 +51,25 @@ class LicensePlateDetector:
                 print(f"✗ Lỗi khi load model: {e2}")
                 raise
     
+    def _preprocess_image(self, image):
+        """
+        Chuyển đổi ảnh sang định dạng numpy RGB chuẩn
+        """
+        # Chuyển đổi PIL Image sang numpy array nếu cần
+        if hasattr(image, 'mode'):  # PIL Image
+            image_np = np.array(image)
+        else:
+            image_np = image
+        
+        # Kiểm tra nếu ảnh là grayscale (2 chiều) -> convert sang RGB
+        if len(image_np.shape) == 2:
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_GRAY2RGB)
+        # Kiểm tra nếu ảnh có 4 kênh (RGBA) -> convert sang RGB
+        elif image_np.shape[2] == 4:
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
+            
+        return image_np
+
     def detect(self, image):
         """
         Phát hiện biển số trong ảnh
@@ -64,20 +83,7 @@ class LicensePlateDetector:
         if self.model is None:
             raise RuntimeError("Model chưa được load!")
         
-        # Chuyển đổi PIL Image sang numpy array nếu cần
-        if hasattr(image, 'mode'):  # PIL Image
-            image_np = np.array(image)
-        else:
-            image_np = image
-        
-        # Kiểm tra nếu ảnh là grayscale (2 chiều) -> convert sang RGB
-        if len(image_np.shape) == 2:
-            image_np = cv2.cvtColor(image_np, cv2.COLOR_GRAY2RGB)
-        # Kiểm tra nếu ảnh có 4 kênh (RGBA) -> convert sang RGB
-        elif image_np.shape[2] == 4:
-            image_np = cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
-        
-
+        image_np = self._preprocess_image(image)
         
         # Thực hiện detection
         # Thêm conf=0.25 để lọc các box có độ tin cậy thấp
@@ -97,18 +103,7 @@ class LicensePlateDetector:
                 - roi: Ảnh vùng biển số (numpy array)
                 - bbox: Tọa độ bounding box (x1, y1, x2, y2)
         """
-        # Chuyển đổi PIL Image sang numpy array nếu cần
-        if hasattr(image, 'mode'):  # PIL Image
-            image_np = np.array(image)
-        else:
-            image_np = image
-            
-        # Kiểm tra nếu ảnh là grayscale (2 chiều) -> convert sang RGB
-        if len(image_np.shape) == 2:
-            image_np = cv2.cvtColor(image_np, cv2.COLOR_GRAY2RGB)
-        # Kiểm tra nếu ảnh có 4 kênh (RGBA) -> convert sang RGB
-        elif image_np.shape[2] == 4:
-            image_np = cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
+        image_np = self._preprocess_image(image)
         
         results = self.detect(image_np)
         plate_regions = []
