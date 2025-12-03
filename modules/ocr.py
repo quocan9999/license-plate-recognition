@@ -43,12 +43,46 @@ class LicensePlateOCR:
         """
         return self.reader.readtext(image, detail=detail)
     
+    def _sort_ocr_results_top_to_bottom(self, ocr_output: List[Any]) -> List[Any]:
+        """
+        Sắp xếp kết quả OCR theo thứ tự từ trên xuống dưới, trái qua phải
+        
+        Đối với biển số 2 dòng, cần đọc dòng trên trước, sau đó dòng dưới.
+        
+        Args:
+            ocr_output: Kết quả từ EasyOCR [[bbox, text, conf], ...]
+            
+        Returns:
+            Kết quả đã được sắp xếp
+        """
+        if len(ocr_output) == 0:
+            return ocr_output
+        
+        # Sắp xếp theo tọa độ Y (top) của bbox, sau đó theo X (left)
+        # bbox format: [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+        # Lấy y_center = (y1 + y3) / 2, x_center = (x1 + x3) / 2
+        
+        def get_sort_key(item):
+            bbox = item[0]
+            # Tính tọa độ trung tâm
+            y_center = (bbox[0][1] + bbox[2][1]) / 2
+            x_center = (bbox[0][0] + bbox[2][0]) / 2
+            # Sắp xếp theo Y trước (trên -> dưới), sau đó X (trái -> phải)
+            return (y_center, x_center)
+        
+        sorted_output = sorted(ocr_output, key=get_sort_key)
+        return sorted_output
+    
+
     def _process_ocr_result(self, ocr_output: List[Any], preprocessed: np.ndarray, method: str, intermediates: Dict[str, np.ndarray]) -> Tuple[Optional[Dict[str, Any]], float]:
         """
         Xử lý kết quả raw từ EasyOCR -> plate_info
         """
         if len(ocr_output) == 0:
             return None, 0.0
+        
+        # Sắp xếp kết quả OCR theo thứ tự từ trên xuống dưới, trái qua phải
+        ocr_output = self._sort_ocr_results_top_to_bottom(ocr_output)
             
         # Tách text và confidence
         # ocr_output format: [[bbox, text, conf], ...]

@@ -62,13 +62,13 @@ class HistoryLogger:
             
             with open(csv_file, mode='a', newline='', encoding='utf-8-sig') as f:
                 writer = csv.writer(f)
-                # Header
+                # Header - Cập nhật để bao gồm cột Detected Image Path
                 if not file_exists:
-                    writer.writerow(['Timestamp', 'License Plate', 'Vehicle Type', 'Original Image Path', 'ROI Image Path', 'Preprocessed Image Path'])
+                    writer.writerow(['Thời gian', 'Biển số xe', 'Loại xe', 'Đường dẫn ảnh gốc', 'Đường dẫn ảnh ROI', 'Đường dẫn ảnh đã qua tiền xử lý', 'Đường dẫn ảnh đã nhận diện'])
                 
                 # Nếu không có biển số nào
                 if not detections:
-                     writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), "No Plate", "", save_original_path, "", ""])
+                     writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), "No Plate", "", save_original_path, "", "", ""])
                 
                 # 2. Lưu từng biển số cắt được (ROI)
                 for i, det in enumerate(detections):
@@ -92,21 +92,46 @@ class HistoryLogger:
                     
                     # Lưu ảnh Preprocessed (nếu có)
                     save_preprocessed_path = ""
+                    save_detected_path = ""
+                    
                     if preprocessed_image is not None:
-                        # 1. Lưu ảnh kết quả cuối cùng: ..._processed.jpg
+                        # 1. Lưu ảnh kết quả cuối cùng (processed): ..._processed.jpg
                         save_final_name = f"{timestamp}_{clean_text}_{i}_processed.jpg"
                         save_preprocessed_path = os.path.join(save_dir, save_final_name)
                         Image.fromarray(preprocessed_image).save(save_preprocessed_path)
                         
-                        # 2. Lưu từng bước trung gian
+                        # 2. Lưu từng bước trung gian (intermediate preprocessing steps)
                         if intermediate_images:
                             for step_name, step_img in intermediate_images.items():
-                                save_step_name = f"{timestamp}_{clean_text}_{i}_processed_{step_name}.jpg"
+                                # Tên file: YYYYMMDD_HHMMSS_BienSo_Index_step_name.jpg
+                                save_step_name = f"{timestamp}_{clean_text}_{i}_{step_name}.jpg"
                                 save_step_path = os.path.join(save_dir, save_step_name)
-                                Image.fromarray(step_img).save(save_step_path)
+                                
+                                # Kiểm tra nếu step_img là numpy array
+                                if isinstance(step_img, np.ndarray):
+                                    Image.fromarray(step_img).save(save_step_path)
                     
-                    # Ghi log
-                    writer.writerow([now.strftime("%Y-%m-%d %H:%M:%S"), plate_text, vehicle_type, save_original_path, save_roi_path, save_preprocessed_path])
+                    # 3. Lưu ảnh đã qua nhận diện (detected image with bbox - nếu có)
+                    # Lưu ý: Hiện tại detection không trả về ảnh với bbox, 
+                    # nếu cần có thể thêm sau
+                    detected_image = det.get('detected_image')
+                    if detected_image is not None:
+                        save_detected_name = f"{timestamp}_{clean_text}_{i}_detected.jpg"
+                        save_detected_path = os.path.join(save_dir, save_detected_name)
+                        if isinstance(detected_image, np.ndarray):
+                            Image.fromarray(detected_image).save(save_detected_path)
+                    
+                    # Ghi log vào CSV
+                    # LƯU Ý: Chỉ lưu đường dẫn ảnh processed cuối cùng, không lưu intermediate
+                    writer.writerow([
+                        now.strftime("%Y-%m-%d %H:%M:%S"), 
+                        plate_text, 
+                        vehicle_type, 
+                        save_original_path, 
+                        save_roi_path, 
+                        save_preprocessed_path,
+                        save_detected_path
+                    ])
                     
         except Exception as e:
             print(f"Lỗi khi lưu lịch sử: {e}")

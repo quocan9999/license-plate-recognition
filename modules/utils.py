@@ -7,28 +7,45 @@ import re
 from typing import List, Dict, Set
 from .config import VALID_PROVINCE_START, VALID_PROVINCE_END
 
-# --- MÃ TỈNH THÀNH VIỆT NAM (11-99) ---
+# --- MÃ TỈNH THÀNH VIỆT NAM (11-99, trừ 13) ---
 VALID_PROVINCE_CODES = set(range(VALID_PROVINCE_START, VALID_PROVINCE_END))  # 11-99
+VALID_PROVINCE_CODES.discard(13)  # Loại bỏ mã 13
+
+# --- CHỮ CÁI SERIES HỢP LỆ (20 chữ, không có I, J, O, Q, R, W) ---
+VALID_SERIES_LETTERS = set('ABCDEFGHKLMNPSTUVXYZ')
 
 # --- MAPPING CẢI TIẾN ---
 # Mapping: Chữ -> Số (dùng cho vị trí phải là SỐ)
+# LƯU Ý: Biển số Việt Nam KHÔNG dùng chữ I, nên I luôn được mapping thành 1
 dict_char_to_num = {
-    'I': '1', 'L': '1', 'T': '1',
-    'O': '0', 'Q': '0', 'D': '0', 'U': '0',
+    'I': '1',  # Biển số VN không dùng I, nên I → 1
+    'L': '1', 'T': '1',
+    'O': '0',  # Biển số VN không dùng O, nên O → 0
+    'Q': '0',  # Biển số VN không dùng Q, nên Q → 0
+    'D': '0', 'U': '0',
     'B': '8', 'E': '8',
     'S': '5', 'F': '5',
-    'Z': '2', 'R': '2',
+    'Z': '2', 
+    'R': '2',  # Biển số VN không dùng R, nên R → 2
     'G': '6', 'C': '6',
-    'A': '4', 'L': '4',
-    'J': '3',
+    'A': '4',
+    'J': '3',  # Biển số VN không dùng J, nên J → 3
+    'W': '2',  # Biển số VN không dùng W, nên W → 2
 }
 
 # Mapping: Số -> Chữ (dùng cho vị trí phải là CHỮ)
+# Ưu tiên các chữ cái phổ biến trong biển số VN
 dict_num_to_char = {
-    '0': 'D', '1': 'I', '2': 'Z',
-    '3': 'B', '4': 'A', '5': 'S',
-    '6': 'G', '8': 'B', '7': 'T',
-    '9': 'P' # Optional but helpful
+    '0': 'D',  # D là chữ phổ biến
+    '1': 'L',  # KHÔNG mapping thành I vì biển số VN không dùng I
+    '2': 'Z',
+    '3': 'B',
+    '4': 'A',
+    '5': 'S',
+    '6': 'G',
+    '7': 'T',
+    '8': 'B',
+    '9': 'P'
 }
 
 
@@ -38,22 +55,23 @@ def classify_vehicle(ocr_list: List[str]) -> str:
     
     CẤU TRÚC BIỂN SỐ VIỆT NAM:
     - Ô tô: 
-      + 1 dòng: 30A12345 (mã tỉnh + chữ + 5 số)
-      + 2 dòng: 37A / 555.55 (dòng 1: mã tỉnh + chữ, dòng 2: số)
+      + 1 dòng: 30A12345 (mã tỉnh + chữ + 5 số) - 8 ký tự
+      + 2 dòng: 37A / 555.55 (dòng 1: mã tỉnh + chữ, dòng 2: số) - dòng 1 có 3 ký tự
       
     - Xe máy thường: 
-      + 2 dòng: 29A1 / 123.45 (dòng 1: mã tỉnh + chữ + số, dòng 2: số)
+      + 2 dòng: 29A1 / 123.45 (dòng 1: mã tỉnh + chữ + số, dòng 2: số) - dòng 1 có 4 ký tự
       
     - Xe máy 50cc:
-      + 2 dòng: 29AA / 12345 (dòng 1: mã tỉnh + 2 chữ, dòng 2: số)
+      + 2 dòng: 29AA / 12345 (dòng 1: mã tỉnh + 2 chữ, dòng 2: số) - dòng 1 có 4 ký tự, 2 chữ cuối
     
-    LOGIC PHÂN LOẠI:
+    LOGIC PHÂN LOẠI (CẢI TIẾN):
     - 1 dòng -> Ô TÔ
     - 2+ dòng:
-      + Dòng 1 kết thúc bằng SỐ -> XE MÁY thường
-      + Dòng 1 kết thúc bằng CHỮ:
-        * Nếu có 2 chữ liên tiếp (4+ ký tự) -> XE MÁY 50cc
-        * Nếu chỉ 1 chữ (3 ký tự: NN-L) -> Ô TÔ
+      + Dòng 1 có 3 ký tự (NN-L) -> Ô TÔ 2 dòng
+      + Dòng 1 có 4+ ký tự:
+        * Nếu 2 ký tự cuối đều là CHỮ -> XE MÁY 50cc
+        * Nếu ký tự cuối là SỐ -> XE MÁY thường
+        * Nếu ký tự cuối là CHỮ nhưng ký tự thứ 3 là SỐ -> XE MÁY thường (OCR thiếu số)
     
     Args:
         ocr_list: Danh sách các dòng text từ OCR
@@ -72,29 +90,48 @@ def classify_vehicle(ocr_list: List[str]) -> str:
         if len(line1_clean) == 0: 
             return "KHÔNG RÕ"
 
-        last_char = line1_clean[-1]
+        # LOGIC MỚI: Dựa vào độ dài dòng 1
+        if len(line1_clean) == 3:
+            # Dòng 1 có 3 ký tự (NN-L) -> Ô TÔ 2 dòng
+            # Ví dụ: 30A / 123.45, 37R / 555.55
+            return "Ô TÔ"
         
-        # Nếu ký tự cuối của dòng 1 là số -> xe máy thông thường
-        # Ví dụ: 29A1 / 123.45
-        if last_char.isdigit():
-            return "XE MÁY"
-        else:
-            # Ký tự cuối là CHỮ
-            # Kiểm tra xem có 2 chữ liên tiếp không (xe máy 50cc)
-            # Ví dụ: 29AA -> len=4, 2 ký tự cuối đều là chữ
-            if len(line1_clean) >= 4 and not line1_clean[-2].isdigit():
-                # Xe máy 50cc: 29AA / 12345
+        elif len(line1_clean) == 4:
+            # Dòng 1 có 4 ký tự -> Kiểm tra 2 ký tự cuối
+            char3 = line1_clean[2]  # Ký tự thứ 3 (index 2)
+            char4 = line1_clean[3]  # Ký tự thứ 4 (index 3)
+            
+            # Nếu 2 ký tự cuối đều là CHỮ -> XE MÁY 50cc
+            # Ví dụ: 29AA / 12345
+            if char3.isalpha() and char4.isalpha():
+                return "XE MÁY"
+            
+            # Nếu ký tự thứ 3 là SỐ -> XE MÁY thường
+            # Ví dụ: 29A1 / 123.45
+            elif char3.isdigit():
+                return "XE MÁY"
+            
+            # Trường hợp khác (char3 là chữ, char4 là số hoặc ngược lại)
+            # Có thể là lỗi OCR, mặc định là XE MÁY
+            else:
+                return "XE MÁY"
+        
+        elif len(line1_clean) > 4:
+            # Dòng 1 quá dài -> Có thể là OCR nhận diện sai
+            # Kiểm tra ký tự cuối
+            last_char = line1_clean[-1]
+            if last_char.isdigit():
                 return "XE MÁY"
             else:
-                # Ô tô 2 dòng: 37A / 555.55
-                # Dòng 1 chỉ có 3 ký tự (NN + L)
-                # Tuy nhiên, nếu L không phải là A, B, C, D (các series ô tô phổ biến),
-                # thì khả năng cao là Xe máy bị nhận diện thiếu số (ví dụ: 59-V3 -> 59-V)
-                series_char = line1_clean[-1]
-                if series_char in ['A', 'B', 'C', 'D']:
-                    return "Ô TÔ"
+                # Kiểm tra 2 ký tự cuối
+                if len(line1_clean) >= 4 and line1_clean[-2].isalpha():
+                    return "XE MÁY"  # 50cc
                 else:
                     return "XE MÁY"
+        
+        elif len(line1_clean) < 3:
+            # Dòng 1 quá ngắn -> Không rõ
+            return "KHÔNG RÕ"
 
     return "KHÔNG RÕ"
 
