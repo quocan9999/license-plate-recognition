@@ -14,6 +14,17 @@ VALID_PROVINCE_CODES.discard(13)  # Loại bỏ mã 13
 # --- CHỮ CÁI SERIES HỢP LỆ (20 chữ, không có I, J, O, Q, R, W) ---
 VALID_SERIES_LETTERS = set('ABCDEFGHKLMNPSTUVXYZ')
 
+# --- MAPPING CHỮ CÁI KHÔNG HỢP LỆ THÀNH HỢP LỆ ---
+# Sửa các chữ cái không có trong biển số VN thành chữ tương tự
+INVALID_CHAR_MAPPING = {
+    'I': 'L',  # I → L (tương tự nhau)
+    'J': 'U',  # J → U (tương tự nhau)  
+    'O': 'D',  # O → D (tương tự nhau)
+    'Q': 'G',  # Q → G (tương tự nhau)
+    'R': 'K',  # R → K (tương tự nhau)
+    'W': 'V',  # W → V (tương tự nhau) - FIX CHO TRƯỜNG HỢP NÀY
+}
+
 # --- MAPPING CẢI TIẾN ---
 # Mapping: Chữ -> Số (dùng cho vị trí phải là SỐ)
 # LƯU Ý: Biển số Việt Nam KHÔNG dùng chữ I, nên I luôn được mapping thành 1
@@ -80,8 +91,22 @@ def classify_vehicle(ocr_list: List[str]) -> str:
         Loại xe: "Ô TÔ", "XE MÁY", hoặc "KHÔNG RÕ"
     """
     if len(ocr_list) == 1:
-        # 1 dòng -> Ô tô (ví dụ: 30A12345)
-        return "Ô TÔ"
+        # 1 dòng -> Kiểm tra độ dài để phân biệt
+        line = ocr_list[0]
+        line_clean = re.sub(r'[^A-Z0-9]', '', line.upper())
+        
+        if len(line_clean) == 8:
+            # 8 ký tự -> Ô tô (ví dụ: 30A12345)
+            return "Ô TÔ"
+        elif len(line_clean) == 9:
+            # 9 ký tự -> Xe máy thường (ví dụ: 59V816451)
+            return "XE MÁY"
+        elif len(line_clean) == 7:
+            # 7 ký tự -> Có thể xe máy 50cc (ví dụ: 29AA12345)
+            return "XE MÁY"
+        else:
+            # Độ dài khác -> Mặc định xe máy
+            return "XE MÁY"
 
     elif len(ocr_list) >= 2:
         line1 = ocr_list[0]
@@ -202,6 +227,10 @@ def fix_plate_chars(raw_text: str, is_50cc: bool = False) -> str:
     # === VỊ TRÍ 2: CHỮ CÁI SERIES (Luôn là CHỮ) ===
     if chars[2] in dict_num_to_char:
         chars[2] = dict_num_to_char[chars[2]]
+    
+    # Sửa chữ cái không hợp lệ thành hợp lệ
+    if chars[2] in INVALID_CHAR_MAPPING:
+        chars[2] = INVALID_CHAR_MAPPING[chars[2]]
 
     # === XỬ LÝ PHẦN CÒN LẠI ===
     start_index_for_numbers = 3
@@ -212,6 +241,9 @@ def fix_plate_chars(raw_text: str, is_50cc: bool = False) -> str:
         if len(chars) > 3:
             if chars[3] in dict_num_to_char:
                 chars[3] = dict_num_to_char[chars[3]]
+            # Sửa chữ cái không hợp lệ cho vị trí 3
+            if chars[3] in INVALID_CHAR_MAPPING:
+                chars[3] = INVALID_CHAR_MAPPING[chars[3]]
         start_index_for_numbers = 4
     
     # Các vị trí còn lại luôn là SỐ

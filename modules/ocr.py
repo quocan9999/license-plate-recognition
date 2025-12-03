@@ -130,17 +130,21 @@ class LicensePlateOCR:
         variants = preprocess_for_ocr(roi, apply_warping=apply_warping)
         
         candidates = []
+        all_intermediates = {}  # Collect all intermediate images
         
         for image, method in variants:
+            # Lưu tất cả intermediate images
+            all_intermediates[method] = image
+            
             # OCR
             ocr_output = self.read_text(image, detail=1)
             
             # Xử lý kết quả
-            intermediates = {method: image}
-            
-            plate_info, conf = self._process_ocr_result(ocr_output, image, method, intermediates)
+            plate_info, conf = self._process_ocr_result(ocr_output, image, method, all_intermediates)
             
             if plate_info and self.is_valid_plate(plate_info):
+                # Ensure all intermediates are included
+                plate_info['intermediate_images'] = all_intermediates
                 candidates.append(plate_info)
                 
                 # --- EARLY EXIT (Dừng sớm) ---
@@ -149,17 +153,81 @@ class LicensePlateOCR:
                     print(f"⚡ Early exit with '{method}' ({conf:.2f})")
                     return plate_info
                 
-        # Chọn kết quả tốt nhất
+        # Chọn kết quả tốt nhất với SMART RANKING
         if not candidates:
             return None
             
-        # Sắp xếp theo confidence giảm dần
-        candidates.sort(key=lambda x: x['confidence'], reverse=True)
+        # Smart ranking: Ưu tiên warped methods và binary images
+        def calculate_smart_score(candidate):
+            """
+            CẢI TIẾN: Tính điểm thông minh cho candidate với xác thực chất lượng
+            
+            Ưu tiên:
+            1. Điểm tin cậy (quan trọng nhất)
+            2. Độ hoàn chỉnh văn bản (phạt văn bản bị cắt)
+            3. Điểm thưởng phương pháp (vừa phải)
+            """
+            method = candidate['preprocessing_method']
+            confidence = candidate['confidence']
+            raw_text = candidate.get('raw_text', '')
+            clean_text = candidate.get('clean_text', '')
+            
+            # Điểm cơ bản = confidence (0.0-1.0)
+            score = confidence
+            
+            # KIỂM TRA CHẤT LƯỢNG
+            # 1. Kiểm tra độ hoàn chỉnh văn bản
+            if len(clean_text) < 6:  # Quá ngắn (phát hiện không đầy đủ)
+                score -= 0.2  # Phạt nặng
+            elif len(clean_text) < 8:  # Có thể không đầy đủ
+                score -= 0.1  # Phạt vừa
+                
+            # 2. Kiểm tra ngưỡng tin cậy
+            if confidence < 0.2:  # Tin cậy rất thấp
+                score -= 0.15  # Phạt bổ sung
+            elif confidence < 0.3:  # Tin cậy thấp
+                score -= 0.05  # Phạt nhỏ
+                
+            # ĐIỂM THƯỞNG PHƯƠNG PHÁP (GIẢM - bảo thủ hơn)
+            # Điểm thưởng vừa cho phương pháp warped (chỉ khi tin cậy tốt VÀ văn bản đầy đủ)
+            if ('warped' in method.lower() and confidence > 0.25 and len(clean_text) >= 7):
+                score += 0.08  # Giảm từ 0.15 xuống 0.08
+            # Phạt cho phương pháp warped với kết quả kém
+            elif 'warped' in method.lower() and (confidence < 0.3 or len(clean_text) < 6):
+                score -= 0.1  # Phạt cho warping kém
+                
+            # Điểm thưởng vừa cho phương pháp binary
+            if 'otsu' in method.lower():
+                score += 0.08  # Giảm từ 0.15 xuống 0.08
+                
+            # Điểm thưởng nhỏ kết hợp (chỉ khi cả tin cậy và độ dài văn bản tốt)
+            if ('warped' in method.lower() and 'otsu' in method.lower() and 
+                confidence > 0.25 and len(clean_text) >= 7):
+                score += 0.05  # Giảm từ 0.10 xuống 0.05
+                
+            # Phạt nhỏ cho grayscale thuần (không otsu)
+            if 'gray' in method.lower() and 'otsu' not in method.lower() and 'clahe' not in method.lower():
+                score -= 0.02  # Giảm phạt
+                
+            return score
+        
+        # Sort by smart score (descending)
+        candidates.sort(key=calculate_smart_score, reverse=True)
         
         best_result = candidates[0]
+        # Ensure all intermediates are included in final result
+        best_result['intermediate_images'] = all_intermediates
         
-        # Log debug
-        print(f"Selected '{best_result['preprocessing_method']}' ({best_result['confidence']:.2f}) from {len(candidates)} candidates.")
+        # Enhanced debug log
+        smart_score = calculate_smart_score(best_result)
+        print(f"Selected '{best_result['preprocessing_method']}' (conf: {best_result['confidence']:.2f}, smart_score: {smart_score:.2f}) from {len(candidates)} candidates.")
+        
+        # Show all candidates for debugging
+        if len(candidates) > 1:
+            print("📊 All candidates:")
+            for i, candidate in enumerate(candidates[:3]):  # Show top 3
+                c_score = calculate_smart_score(candidate)
+                print(f"  {i+1}. {candidate['preprocessing_method']}: conf={candidate['confidence']:.2f}, smart_score={c_score:.2f}")
             
         return best_result
     
