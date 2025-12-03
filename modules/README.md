@@ -51,6 +51,7 @@ logger.save_result(image_path, original_img, detections)
 
 Chức năng:
 - Load và quản lý YOLO model
+- `_preprocess_image(image)` - Chuẩn hóa ảnh đầu vào (Private helper)
 - Phát hiện vùng biển số trong ảnh
 - Trích xuất ROI (Region of Interest)
 - Vẽ bounding box lên ảnh
@@ -70,6 +71,7 @@ plate_regions = detector.get_plate_regions(image)
 Chức năng:
 - Khởi tạo EasyOCR reader
 - Đọc text từ ảnh biển số
+- Cơ chế **Early Exit**: Dừng sớm nếu độ tin cậy > 0.8 để tăng tốc độ
 - Xử lý và sửa lỗi ký tự
 - Phân loại loại xe (Ô tô/Xe máy)
 - Format biển số theo chuẩn Việt Nam
@@ -85,10 +87,10 @@ plate_info = ocr.process_plate(roi)
 ### 5. `preprocessing.py` - Module Tiền xử lý
 
 **Functions:**
-- `preprocess_for_ocr(roi)` - Pipeline tiền xử lý toàn diện (Warping -> Gray -> CLAHE -> Upscale)
+- `preprocess_for_ocr(roi)` - Pipeline tiền xử lý tối ưu (Warped -> Gray -> CLAHE -> Otsu)
 - `detect_and_warp_plate(roi)` - Tự động phát hiện góc và nắn thẳng biển số
 - `apply_clahe(image)` - Cân bằng sáng cục bộ
-- `apply_super_resolution(image)` - Phóng to ảnh (Upscaling)
+- `apply_super_resolution(image)` - Phóng to ảnh (Đã tắt mặc định để tối ưu tốc độ)
 - `four_point_transform(image, pts)` - Biến đổi hình học
 
 Ví dụ sử dụng:
@@ -96,7 +98,7 @@ Ví dụ sử dụng:
 from modules.preprocessing import preprocess_for_ocr, enhance_contrast
 
 preprocessed = preprocess_for_ocr(roi)
-enhanced = enhance_contrast(preprocessed)
+# enhanced = enhance_contrast(preprocessed) # (Hàm này đang được comment)
 ```
 
 ### 6. `utils.py` - Module Hỗ trợ

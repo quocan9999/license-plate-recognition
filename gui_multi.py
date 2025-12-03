@@ -17,7 +17,7 @@ from modules.config import HISTORY_DIR
 class MultiPlateApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Hệ thống Nhận diện Biển số xe - EasyOCR + Warping")
+        self.root.title("Hệ thống Nhận diện Biển số xe")
 
         # Tự động phóng to toàn màn hình khi mở
         try:

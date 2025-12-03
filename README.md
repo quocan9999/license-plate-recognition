@@ -11,7 +11,8 @@ Dự án này là một hệ thống nhận diện biển số xe tự động s
 - **Phát hiện biển số**: Nhận diện vị trí biển số xe máy, ô tô trong ảnh.
 - **Đọc biển số (OCR)**: Chuyển đổi hình ảnh biển số thành văn bản.
 - **Xử lý hàng loạt**: Hỗ trợ chọn và xử lý nhiều ảnh cùng lúc.
-- **Lưu trữ lịch sử**: Tự động lưu ảnh gốc, ảnh cắt (ROI), ảnh tiền xử lý và kết quả vào thư mục `History`.
+- **Tối ưu hóa hiệu năng**: Sử dụng đa luồng (Multithreading) và cơ chế dừng sớm (Early Exit) để tăng tốc độ xử lý.
+- **Lưu trữ lịch sử**: Tự động lưu ảnh gốc, ảnh cắt (ROI), ảnh tiền xử lý và kết quả vào thư mục `history`.
 - **Giao diện trực quan**: Giao diện GUI thân thiện xây dựng bằng Tkinter.
 
 ## 📂 Cấu trúc Dự án
@@ -19,6 +20,7 @@ Dự án này là một hệ thống nhận diện biển số xe tự động s
 ```
 license-plate-recognition/
 ├── gui_multi.py          # File chạy chính (Giao diện người dùng)
+├── clear_history.py      # Script xóa dữ liệu lịch sử
 ├── modules/              # Các module xử lý chính
 │   ├── config.py         # Cấu hình và hằng số hệ thống
 │   ├── detection.py      # Module phát hiện biển số (YOLO)
@@ -27,8 +29,8 @@ license-plate-recognition/
 │   ├── preprocessing.py  # Module tiền xử lý ảnh
 │   └── utils.py          # Các hàm hỗ trợ (xử lý chuỗi, format)
 ├── models/               # Thư mục chứa model
-│   └── best.pt           # Model YOLO đã được train
-├── History/              # Thư mục lưu kết quả (Tự động tạo)
+│   └── yolov8s.pt        # Model YOLO đã được train
+├── history/              # Thư mục lưu kết quả (Tự động tạo)
 ├── requirements.txt      # Danh sách thư viện cần thiết
 ├── main.png              # Ảnh minh họa giao diện
 └── README.md             # Tài liệu hướng dẫn
@@ -99,9 +101,19 @@ python gui_multi.py
    * **Cột 1**: Ảnh gốc.
    * **Cột 2**: Ảnh kết quả với khung bao quanh biển số.
    * **Cột 3**: Biển số nhận diện được dạng text.
-4. Kết quả chi tiết sẽ được lưu trong thư mục `History/`.
+4. Kết quả chi tiết sẽ được lưu trong thư mục `history/`.
+5. Nhấn nút **"📂 Mở thư mục History"** để truy cập nhanh vào thư mục chứa kết quả.
+
+### 5. Xóa dữ liệu lịch sử
+
+Để xóa toàn bộ dữ liệu trong thư mục `history` (bao gồm ảnh và file CSV), chạy lệnh:
+
+```bash
+python clear_history.py
+```
+*Lưu ý: Bạn sẽ được yêu cầu xác nhận (y/n) trước khi xóa.*
 
 ## 📝 Ghi chú
 
-- File `history.csv` trong thư mục `History` chứa log chi tiết của các lần nhận diện.
-- Đảm bảo file model `models/best.pt` đã tồn tại trước khi chạy.
+- File `history.csv` trong thư mục `history` chứa log chi tiết của các lần nhận diện.
+- Đảm bảo file model `models/best.pt (hoặc model của bạn)` đã tồn tại trước khi chạy.
