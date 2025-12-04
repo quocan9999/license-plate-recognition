@@ -5,14 +5,12 @@ Bao gồm: Grayscale conversion, Warping (nắn thẳng), và các kỹ thuật 
 
 import cv2
 import numpy as np
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple
 from .config import (
     CLAHE_CLIP_LIMIT, 
     CLAHE_TILE_GRID_SIZE, 
     UPSCALE_SCALE, 
-    WARP_PADDING,
-    ADAPTIVE_THRESH_BLOCK_SIZE,
-    ADAPTIVE_THRESH_C
+    WARP_PADDING
 )
 
 
@@ -166,9 +164,6 @@ def detect_and_warp_plate(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     Returns:
         Ảnh đã được nắn thẳng, hoặc ảnh gốc nếu không phát hiện được góc
     """
-    
-    h, w = roi.shape[:2]
-    
     # Phương pháp 1: Edge-based warping (HIỆU QUẢ NHẤT)
     warped, method = edge_based_warping(roi)
     if method == "edge_warped":
@@ -207,7 +202,7 @@ def edge_based_warping(roi: np.ndarray) -> Tuple[np.ndarray, str]:
         ("sobel", lambda img: cv2.convertScaleAbs(cv2.Sobel(img, cv2.CV_64F, 1, 1, ksize=3)))
     ]
     
-    for edge_name, edge_func in edges_methods:
+    for _, edge_func in edges_methods:
         edges = edge_func(gray)
         
         # Hough Line Detection
@@ -533,57 +528,6 @@ def preprocess_for_ocr(roi: np.ndarray, apply_warping: bool = True) -> List[Tupl
     otsu = apply_threshold(gray, 'otsu')
     variants.append((otsu, "gray_otsu"))
     
-    # 5. Upscale (Chỉ nếu ảnh quá nhỏ - Ưu tiên thấp nhất)
-    # Lưu ý: apply_super_resolution giờ đã có check kích thước bên trong
-    # upscaled = apply_super_resolution(gray)
-    # if upscaled.shape != gray.shape:
-    #     variants.append((upscaled, "gray_upscale"))
+
 
     return variants
-
-
-# def apply_adaptive_threshold(gray_image):
-#     """
-#     Áp dụng adaptive thresholding cho ảnh grayscale
-    
-#     Args:
-#         gray_image: Ảnh grayscale
-        
-#     Returns:
-#         Ảnh đã được threshold
-#     """
-#     return cv2.adaptiveThreshold(
-#         gray_image, 
-#         255, 
-#         cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-#         cv2.THRESH_BINARY, 
-#         11, 
-#         2
-#     )
-
-
-# def denoise_image(image):
-#     """
-#     Khử nhiễu cho ảnh
-    
-#     Args:
-#         image: Ảnh đầu vào
-        
-#     Returns:
-#         Ảnh đã được khử nhiễu
-#     """
-#     return cv2.fastNlMeansDenoising(image, None, 10, 7, 21)
-
-
-# def enhance_contrast(image):
-#     """
-#     Tăng cường độ tương phản của ảnh
-    
-#     Args:
-#         image: Ảnh đầu vào (grayscale)
-        
-#     Returns:
-#         Ảnh đã được tăng cường độ tương phản
-#     """
-#     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-#     return clahe.apply(image)

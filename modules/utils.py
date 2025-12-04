@@ -4,7 +4,7 @@ Bao gồm: validation, formatting, character mapping, và phân loại xe
 """
 
 import re
-from typing import List, Dict, Set
+from typing import List
 from .config import VALID_PROVINCE_START, VALID_PROVINCE_END
 
 # --- MÃ TỈNH THÀNH VIỆT NAM (11-99, trừ 13) ---
@@ -142,17 +142,8 @@ def classify_vehicle(ocr_list: List[str]) -> str:
                 return "XE MÁY"
         
         elif len(line1_clean) > 4:
-            # Dòng 1 quá dài -> Có thể là OCR nhận diện sai
-            # Kiểm tra ký tự cuối
-            last_char = line1_clean[-1]
-            if last_char.isdigit():
-                return "XE MÁY"
-            else:
-                # Kiểm tra 2 ký tự cuối
-                if len(line1_clean) >= 4 and line1_clean[-2].isalpha():
-                    return "XE MÁY"  # 50cc
-                else:
-                    return "XE MÁY"
+            # Dòng 1 quá dài -> Có thể là OCR nhận diện sai -> mặc định xe máy
+            return "XE MÁY"
         
         elif len(line1_clean) < 3:
             # Dòng 1 quá ngắn -> Không rõ
