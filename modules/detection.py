@@ -70,12 +70,13 @@ class LicensePlateDetector:
             
         return image_np
 
-    def detect(self, image):
+    def detect(self, image, image_index=None):
         """
         Phát hiện biển số trong ảnh
         
         Args:
             image: Ảnh đầu vào (PIL Image hoặc numpy array)
+            image_index: Số thứ tự ảnh (optional)
             
         Returns:
             results: Kết quả detection từ YOLO
@@ -85,18 +86,39 @@ class LicensePlateDetector:
         
         image_np = self._preprocess_image(image)
         
-        # Thực hiện detection
+        # Thực hiện detection với verbose=False để tắt output tự động
         # Thêm conf=0.25 để lọc các box có độ tin cậy thấp
         # Thêm classes=[0] để chỉ nhận diện class 0 (biển số)
-        results = self.model(image_np, conf=0.25, classes=[0])
+        results = self.model(image_np, conf=0.25, classes=[0], verbose=False)
+        
+        # In thông tin detection với STT tùy chỉnh
+        if results and len(results) > 0:
+            result = results[0]  # Lấy kết quả đầu tiên
+            if hasattr(result, 'boxes') and result.boxes is not None:
+                num_detections = len(result.boxes)
+                orig_height, orig_width = image_np.shape[:2]
+                
+                # Lấy kích thước inference từ model (thường là 640x640 cho YOLOv8)
+                model_imgsz = getattr(self.model, 'imgsz', 640)
+                if isinstance(model_imgsz, (list, tuple)):
+                    yolo_size = f"{model_imgsz[0]}x{model_imgsz[1]}" if len(model_imgsz) > 1 else f"{model_imgsz[0]}x{model_imgsz[0]}"
+                else:
+                    yolo_size = f"{model_imgsz}x{model_imgsz}"
+                
+                if image_index is not None:
+                    print(f"{image_index}: {orig_width}x{orig_height} (resized to: {yolo_size}) {num_detections} bien_so")
+                else:
+                    print(f"0: {orig_width}x{orig_height} (resized to: {yolo_size}) {num_detections} bien_so")
+        
         return results
     
-    def get_plate_regions(self, image):
+    def get_plate_regions(self, image, image_index=None):
         """
         Lấy các vùng ROI (Region of Interest) của biển số
         
         Args:
             image: Ảnh đầu vào (PIL Image hoặc numpy array)
+            image_index: Số thứ tự ảnh (optional)
             
         Returns:
             List các tuple (roi, bbox) với:
@@ -105,7 +127,7 @@ class LicensePlateDetector:
         """
         image_np = self._preprocess_image(image)
         
-        results = self.detect(image_np)
+        results = self.detect(image_np, image_index=image_index)
         plate_regions = []
         
         for result in results:
