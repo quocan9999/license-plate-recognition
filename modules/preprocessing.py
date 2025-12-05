@@ -13,7 +13,6 @@ from .config import (
     WARP_PADDING
 )
 
-
 def order_points(pts: np.ndarray) -> np.ndarray:
     """
     Sắp xếp các điểm theo thứ tự: top-left, top-right, bottom-right, bottom-left
@@ -38,6 +37,66 @@ def order_points(pts: np.ndarray) -> np.ndarray:
     
     return rect
 
+def apply_clahe(image: np.ndarray) -> np.ndarray:
+    """
+    Áp dụng CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    Để cải thiện độ tương phản của ảnh
+    
+    Rất hiệu quả cho:
+    - Ảnh bị thiếu sáng
+    - Ảnh có bóng đổ
+    - Ảnh mời trường thấp
+    
+    Args:
+        image: Ảnh xám (grayscale)
+        
+    Returns:
+        Ảnh đã cải thiện độ tương phản
+    """
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID_SIZE)
+    enhanced = clahe.apply(image)
+    
+    return enhanced
+
+def apply_threshold(image: np.ndarray, method: str = 'otsu') -> np.ndarray:
+    """
+    Áp dụng threshold để chuyển ảnh thành binary
+    
+    Args:
+        image: Ảnh xám
+        method: Phương pháp threshold ('otsu', 'adaptive')
+        
+    Returns:
+        Ảnh binary
+    """
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
+    if method == 'otsu':
+        _, binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    elif method == 'adaptive':
+        binary = cv2.adaptiveThreshold(image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    else:
+        raise ValueError(f"Unsupported threshold method: {method}")
+    
+    return binary
+
+def apply_super_resolution(image: np.ndarray, scale: int = UPSCALE_SCALE) -> np.ndarray:
+    """
+    Phóng to ảnh bằng bicubic interpolation
+    
+    Args:
+        image: Ảnh đầu vào
+        scale: Tỉ lệ phóng to
+        
+    Returns:
+        Ảnh đã phóng to
+    """
+    height, width = image.shape[:2]
+    return cv2.resize(image, (width * scale, height * scale), interpolation=cv2.INTER_CUBIC)
 
 def four_point_transform(image: np.ndarray, pts: np.ndarray) -> np.ndarray:
     """
@@ -92,61 +151,6 @@ def four_point_transform(image: np.ndarray, pts: np.ndarray) -> np.ndarray:
         print(f"⚠️ Four point transform error: {e}")
         return image
 
-
-def apply_clahe(image: np.ndarray) -> np.ndarray:
-    """
-    Áp dụng CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    Giúp cân bằng sáng cục bộ, khắc phục bóng che hoặc lóa.
-    """
-    if len(image.shape) == 3:
-        # Chuyển sang LAB
-        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-        l, a, b = cv2.split(lab)
-        
-        # Áp dụng CLAHE cho kênh L
-        clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID_SIZE)
-        cl = clahe.apply(l)
-        
-        # Merge lại
-        limg = cv2.merge((cl, a, b))
-        final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-        return final
-    else:
-        # Grayscale
-        clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT, tileGridSize=CLAHE_TILE_GRID_SIZE)
-        return clahe.apply(image)
-
-
-def apply_threshold(image: np.ndarray, method: str = 'otsu') -> np.ndarray:
-    """
-    Áp dụng phân ngưỡng (Thresholding) để chuyển sang ảnh nhị phân.
-    Giúp tách chữ khỏi nền nhiễu.
-    """
-    if len(image.shape) == 3:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = image
-        
-    if method == 'otsu':
-        # Otsu's binarization
-        _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        return thresh
-    elif method == 'adaptive':
-        # Adaptive thresholding
-        return cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-    return gray
-
-def apply_super_resolution(image: np.ndarray, scale: int = UPSCALE_SCALE) -> np.ndarray:
-    """
-    Phóng to ảnh (Upscaling) dùng Bicubic Interpolation.
-    ...
-    """
-    h, w = image.shape[:2]
-    if h < 64: # Chỉ upscale nếu ảnh nhỏ
-        return cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-    return image
-
-
 def detect_and_warp_plate(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     """
     ENHANCED: Tự động phát hiện góc biển số và nắn thẳng với thuật toán mạnh hơn
@@ -180,7 +184,6 @@ def detect_and_warp_plate(roi: np.ndarray) -> Tuple[np.ndarray, str]:
         return warped, method
     
     return roi, "original"
-
 
 def edge_based_warping(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     """
@@ -237,7 +240,6 @@ def edge_based_warping(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     
     return roi, "original"
 
-
 def corner_based_warping(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     """
     Warping dựa trên corner detection
@@ -267,7 +269,6 @@ def corner_based_warping(roi: np.ndarray) -> Tuple[np.ndarray, str]:
             pass
     
     return roi, "original"
-
 
 def improved_contour_warping(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     """
@@ -366,7 +367,6 @@ def improved_contour_warping(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     
     return roi, "original"
 
-
 def find_rectangle_corners_from_lines(h_lines, v_lines, shape):
     """
     Tìm 4 góc hình chữ nhật từ horizontal và vertical lines
@@ -416,7 +416,6 @@ def find_rectangle_corners_from_lines(h_lines, v_lines, shape):
     except:
         return None
 
-
 def line_intersection(line1, line2):
     """
     Tìm giao điểm của 2 đường thẳng
@@ -436,7 +435,6 @@ def line_intersection(line1, line2):
         return [px, py]
     except:
         return None
-
 
 def four_point_transform_enhanced(image: np.ndarray, pts: np.ndarray) -> np.ndarray:
     """
@@ -476,7 +474,6 @@ def four_point_transform_enhanced(image: np.ndarray, pts: np.ndarray) -> np.ndar
     warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
     
     return warped
-
 
 def preprocess_for_ocr(roi: np.ndarray, apply_warping: bool = True) -> List[Tuple[np.ndarray, str]]:
     """
@@ -528,6 +525,5 @@ def preprocess_for_ocr(roi: np.ndarray, apply_warping: bool = True) -> List[Tupl
     otsu = apply_threshold(gray, 'otsu')
     variants.append((otsu, "gray_otsu"))
     
-
 
     return variants

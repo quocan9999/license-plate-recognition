@@ -72,7 +72,6 @@ class LicensePlateOCR:
         
         sorted_output = sorted(ocr_output, key=get_sort_key)
         return sorted_output
-    
 
     def _process_ocr_result(self, ocr_output: List[Any], preprocessed: np.ndarray, method: str, intermediates: Dict[str, np.ndarray]) -> Tuple[Optional[Dict[str, Any]], float]:
         """
@@ -120,6 +119,26 @@ class LicensePlateOCR:
         }
         
         return plate_info, avg_conf
+
+    def is_valid_plate(self, plate_info: Optional[Dict[str, Any]]) -> bool:
+        """
+        Kiểm tra biển số có hợp lệ không
+        """
+        if plate_info is None:
+            return False
+        
+        formatted_text = plate_info.get('formatted_text', '')
+        
+        # Kiểm tra độ dài tối thiểu
+        if len(formatted_text) <= 5:
+            return False
+        
+        # Kiểm tra loại xe
+        vehicle_type = plate_info.get('vehicle_type', '')
+        if vehicle_type == "KHÔNG RÕ":
+            return False
+            
+        return True
 
     def process_plate(self, roi: np.ndarray, apply_warping: bool = True) -> Optional[Dict[str, Any]]:
         """
@@ -230,23 +249,3 @@ class LicensePlateOCR:
                 print(f"  {i+1}. {candidate['preprocessing_method']}: conf={candidate['confidence']:.2f}, smart_score={c_score:.2f}")
             
         return best_result
-    
-    def is_valid_plate(self, plate_info: Optional[Dict[str, Any]]) -> bool:
-        """
-        Kiểm tra biển số có hợp lệ không
-        """
-        if plate_info is None:
-            return False
-        
-        formatted_text = plate_info.get('formatted_text', '')
-        
-        # Kiểm tra độ dài tối thiểu
-        if len(formatted_text) <= 5:
-            return False
-        
-        # Kiểm tra loại xe
-        vehicle_type = plate_info.get('vehicle_type', '')
-        if vehicle_type == "KHÔNG RÕ":
-            return False
-            
-        return True

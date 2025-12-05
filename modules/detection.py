@@ -50,7 +50,7 @@ class LicensePlateDetector:
             except Exception as e2:
                 print(f"✗ Lỗi khi load model: {e2}")
                 raise
-    
+
     def _preprocess_image(self, image):
         """
         Chuyển đổi ảnh sang định dạng numpy RGB chuẩn

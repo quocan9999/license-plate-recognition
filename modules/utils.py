@@ -60,6 +60,22 @@ dict_num_to_char = {
 }
 
 
+def validate_province_code(code_str: str) -> bool:
+    """
+    Kiểm tra mã tỉnh có hợp lệ không (11-99)
+    
+    Args:
+        code_str: Chuỗi mã tỉnh (2 ký tự)
+        
+    Returns:
+        True nếu hợp lệ, False nếu không
+    """
+    try:
+        code = int(code_str)
+        return code in VALID_PROVINCE_CODES
+    except:
+        return False
+
 def classify_vehicle(ocr_list: List[str]) -> str:
     """
     Phân loại Xe máy vs Ô tô
@@ -151,24 +167,6 @@ def classify_vehicle(ocr_list: List[str]) -> str:
 
     return "KHÔNG RÕ"
 
-
-def validate_province_code(code_str: str) -> bool:
-    """
-    Kiểm tra mã tỉnh có hợp lệ không (11-99)
-    
-    Args:
-        code_str: Chuỗi mã tỉnh (2 ký tự)
-        
-    Returns:
-        True nếu hợp lệ, False nếu không
-    """
-    try:
-        code = int(code_str)
-        return code in VALID_PROVINCE_CODES
-    except:
-        return False
-
-
 def fix_plate_chars(raw_text: str, is_50cc: bool = False) -> str:
     """
     Sửa lỗi ký tự dựa trên pattern biển số Việt Nam
@@ -243,7 +241,6 @@ def fix_plate_chars(raw_text: str, is_50cc: bool = False) -> str:
             chars[i] = dict_char_to_num[chars[i]]
 
     return "".join(chars)
-
 
 def format_plate(text: str, vehicle_type: str) -> str:
     """
