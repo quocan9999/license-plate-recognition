@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 from PIL import Image, ImageTk
 import numpy as np
 import os
@@ -13,6 +13,7 @@ from modules.detection import LicensePlateDetector
 from modules.ocr import LicensePlateOCR
 from modules.logger import HistoryLogger
 from modules.config import HISTORY_DIR
+
 
 class MultiPlateApp:
     def __init__(self, root):
@@ -39,9 +40,23 @@ class MultiPlateApp:
         # Biến theo dõi thời gian xử lý
         self.processing_start_time = None
         self.image_processing_times = []
+        
+        # Dữ liệu kết quả xử lý
+        self.results = []  # List of dicts: {file_path, processed_img, cropped_plate, plate_text, processing_time, ...}
+        self.current_index = 0  # Index của ảnh đang được chọn
+        self.auto_playing = False  # Đang tự động duyệt hay không
+        self.auto_play_id = None  # ID của after() để có thể cancel
+        
+        # Tổng thời gian xử lý
+        self.total_processing_time = 0
 
-        # Giao diện chính
-        self.top_frame = tk.Frame(root, bg="#f0f0f0", pady=10)
+        # Xây dựng giao diện
+        self.build_ui()
+
+    def build_ui(self):
+        """Xây dựng giao diện chính"""
+        # ========== TOP FRAME - Buttons ==========
+        self.top_frame = tk.Frame(self.root, bg="#f0f0f0", pady=10)
         self.top_frame.pack(fill="x")
 
         # Frame chứa các nút điều khiển
@@ -57,43 +72,134 @@ class MultiPlateApp:
                                      command=self.open_history_folder,
                                      font=("Arial", 14, "bold"), bg="#FF9800", fg="white", padx=20, pady=5)
         self.btn_history.pack(side="left", padx=10)
-        
-        # Label trạng thái xử lý
-        self.lbl_status = tk.Label(self.top_frame, text="", font=("Arial", 12, "bold"), fg="blue", bg="#f0f0f0")
-        self.lbl_status.pack(pady=5)
-        
-        # Label hướng dẫn thêm Drag & Drop
+
+        # Label hướng dẫn Drag & Drop
         tk.Label(self.top_frame, text="(Mẹo: Kéo thả ảnh vào đây hoặc Click đúp vào ảnh để mở xem chi tiết)", 
                  bg="#f0f0f0",
                  font=("Arial", 10, "italic")).pack()
 
-        self.canvas = tk.Canvas(root, bg="white")
-        self.scrollbar = tk.Scrollbar(root, orient="vertical", command=self.canvas.yview)
-        self.h_scrollbar = tk.Scrollbar(root, orient="horizontal", command=self.canvas.xview)
-        self.scrollable_frame = tk.Frame(self.canvas, bg="white")
+        # ========== MAIN CONTENT FRAME ==========
+        self.main_frame = tk.Frame(self.root, bg="white")
+        self.main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Cấu hình grid cho 3 cột
+        self.main_frame.columnconfigure(0, weight=3)  # Cột 1: Ảnh bounding box
+        self.main_frame.columnconfigure(1, weight=2)  # Cột 2: Ảnh biển số cắt + info
+        self.main_frame.columnconfigure(2, weight=1)  # Cột 3: Danh sách file
+        self.main_frame.rowconfigure(0, weight=1)
 
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-        )
+        # ========== CỘT 1: Ảnh biển số đã vẽ bounding box ==========
+        self.col1_frame = tk.Frame(self.main_frame, bg="white", bd=2, relief="solid")
+        self.col1_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        
+        # Label mô tả
+        tk.Label(self.col1_frame, text="Mô tả: Đây là ảnh biển số đã được vẽ bounding box lên", 
+                 font=("Arial", 11), bg="white", fg="#333", wraplength=400).pack(pady=10)
+        
+        # Canvas để hiển thị ảnh
+        self.img_bbox_label = tk.Label(self.col1_frame, bg="white", cursor="hand2")
+        self.img_bbox_label.pack(expand=True, fill="both", padx=10, pady=10)
+        self.img_bbox_label.bind("<Double-Button-1>", self.open_current_image)
 
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=self.scrollbar.set, xscrollcommand=self.h_scrollbar.set)
+        # ========== CỘT 2: Ảnh biển số cắt + thông tin ==========
+        self.col2_frame = tk.Frame(self.main_frame, bg="#FFFDE7", bd=2, relief="solid", highlightbackground="#FFC107", highlightthickness=2)
+        self.col2_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        
+        # Label mô tả
+        tk.Label(self.col2_frame, text="Mô tả: Đây là ảnh vùng biển số đã cắt ra", 
+                 font=("Arial", 11), bg="#FFFDE7", fg="#F57C00", wraplength=300).pack(pady=10)
+        
+        # Frame chứa ảnh biển số cắt
+        self.plate_img_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
+        self.plate_img_frame.pack(expand=True, fill="both", padx=10, pady=10)
+        
+        self.img_plate_label = tk.Label(self.plate_img_frame, bg="#FFFDE7")
+        self.img_plate_label.pack(expand=True)
+        
+        # ========== Phần hiển thị thông tin biển số ==========
+        self.info_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
+        self.info_frame.pack(fill="x", padx=10, pady=10)
+        
+        # Text biển số nhận diện được (to, dễ nhìn)
+        self.plate_text_label = tk.Label(self.info_frame, text="", 
+                                         font=("Arial", 28, "bold"), fg="#1565C0", bg="#FFFDE7")
+        self.plate_text_label.pack(pady=10)
+        
+        # Thời gian xử lý từng ảnh
+        self.time_label = tk.Label(self.info_frame, text="Thời gian xử lý: ---", 
+                                   font=("Arial", 12), bg="#FFFDE7", fg="#333")
+        self.time_label.pack(pady=5)
+        
+        # Tổng thời gian xử lý
+        self.total_time_label = tk.Label(self.info_frame, text="Tổng thời gian: ---", 
+                                         font=("Arial", 12), bg="#FFFDE7", fg="#666")
+        self.total_time_label.pack(pady=5)
+        
+        # ========== Các nút điều khiển ==========
+        self.control_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
+        self.control_frame.pack(fill="x", padx=10, pady=15)
+        
+        # Nút Tự động
+        self.btn_auto = tk.Button(self.control_frame, text="Tự động", 
+                                  command=self.toggle_auto_play,
+                                  font=("Arial", 14, "bold"), bg="#2196F3", fg="white", 
+                                  padx=20, pady=8, width=10)
+        self.btn_auto.pack(pady=5)
+        
+        # Frame chứa nút Tiếp tục và Lùi
+        self.nav_frame = tk.Frame(self.control_frame, bg="#FFFDE7")
+        self.nav_frame.pack(pady=5)
+        
+        self.btn_next = tk.Button(self.nav_frame, text="Tiếp tục", 
+                                  command=self.next_image,
+                                  font=("Arial", 12, "bold"), bg="#4CAF50", fg="white", 
+                                  padx=15, pady=5, width=8)
+        self.btn_next.pack(side="left", padx=5)
+        
+        self.btn_prev = tk.Button(self.nav_frame, text="Lùi", 
+                                  command=self.prev_image,
+                                  font=("Arial", 12, "bold"), bg="#FF9800", fg="white", 
+                                  padx=15, pady=5, width=8)
+        self.btn_prev.pack(side="left", padx=5)
 
-        self.h_scrollbar.pack(side="bottom", fill="x")
-        self.scrollbar.pack(side="right", fill="y")
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.bind_mouse_scroll()
+        # ========== CỘT 3: Danh sách file ảnh ==========
+        self.col3_frame = tk.Frame(self.main_frame, bg="#E3F2FD", bd=2, relief="solid", highlightbackground="#2196F3", highlightthickness=2)
+        self.col3_frame.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
+        
+        # Label mô tả
+        tk.Label(self.col3_frame, text="Danh sách ảnh", 
+                 font=("Arial", 12, "bold"), bg="#E3F2FD", fg="#1565C0").pack(pady=10)
+        
+        # Frame chứa listbox và scrollbar
+        self.list_frame = tk.Frame(self.col3_frame, bg="#E3F2FD")
+        self.list_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Scrollbar cho listbox
+        self.list_scrollbar = tk.Scrollbar(self.list_frame)
+        self.list_scrollbar.pack(side="right", fill="y")
+        
+        # Listbox hiển thị danh sách file
+        self.file_listbox = tk.Listbox(self.list_frame, font=("Arial", 11), 
+                                        yscrollcommand=self.list_scrollbar.set,
+                                        selectmode=tk.SINGLE, activestyle="dotbox",
+                                        selectbackground="#1976D2", selectforeground="white")
+        self.file_listbox.pack(fill="both", expand=True)
+        self.list_scrollbar.config(command=self.file_listbox.yview)
+        
+        # Bind sự kiện chọn item
+        self.file_listbox.bind("<<ListboxSelect>>", self.on_file_select)
+        self.file_listbox.bind("<Double-Button-1>", self.on_file_double_click)
+        
+        # Label trạng thái
+        self.status_label = tk.Label(self.col3_frame, text="Chưa có ảnh", 
+                                     font=("Arial", 10, "italic"), bg="#E3F2FD", fg="#666")
+        self.status_label.pack(pady=5)
 
     def bind_mouse_scroll(self):
+        """Bind mouse scroll cho listbox"""
         def _on_mousewheel(event):
-            self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        
-        def _on_shift_mousewheel(event):
-            self.canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        self.canvas.bind_all("<MouseWheel>", _on_mousewheel)
-        self.canvas.bind_all("<Shift-MouseWheel>", _on_shift_mousewheel)
+            self.file_listbox.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        self.file_listbox.bind("<MouseWheel>", _on_mousewheel)
 
     def drop_files(self, event):
         """Xử lý sự kiện kéo thả file"""
@@ -103,20 +209,19 @@ class MultiPlateApp:
 
     def parse_drop_files(self, data):
         """Phân tích chuỗi dữ liệu từ sự kiện drop"""
-        # Regex để tách các đường dẫn (xử lý cả đường dẫn có khoảng trắng trong {})
         pattern = r'\{.*?\}|\S+'
         matches = re.findall(pattern, data)
         
         cleaned_paths = []
         for match in matches:
-            # Loại bỏ dấu {} nếu có
             path = match.strip('{}')
-            if os.path.isfile(path): # Chỉ lấy file tồn tại
+            if os.path.isfile(path):
                 cleaned_paths.append(path)
         
         return cleaned_paths
 
     def select_images(self):
+        """Chọn nhiều ảnh từ dialog"""
         file_paths = filedialog.askopenfilenames(
             title="Chọn các ảnh xe cần xử lý",
             filetypes=[("Image files", "*.jpg;*.jpeg;*.png")]
@@ -132,66 +237,69 @@ class MultiPlateApp:
         try:
             if platform.system() == 'Windows':
                 os.startfile(HISTORY_DIR)
-            elif platform.system() == 'Darwin':  # macOS
+            elif platform.system() == 'Darwin':
                 subprocess.call(('open', HISTORY_DIR))
-            else:  # Linux
+            else:
                 subprocess.call(('xdg-open', HISTORY_DIR))
         except Exception as e:
             print(f"Không mở được thư mục history: {e}")
 
-    def open_image_external(self, event, file_path):
-        """Hàm mở ảnh bằng phần mềm mặc định của hệ thống khi click đúp"""
+    def open_image_external(self, file_path):
+        """Mở ảnh bằng phần mềm mặc định của hệ thống"""
         try:
             if platform.system() == 'Windows':
                 os.startfile(file_path)
-            elif platform.system() == 'Darwin':  # macOS
+            elif platform.system() == 'Darwin':
                 subprocess.call(('open', file_path))
-            else:  # Linux
+            else:
                 subprocess.call(('xdg-open', file_path))
         except Exception as e:
             print(f"Không mở được file: {e}")
+
+    def open_current_image(self, event=None):
+        """Mở ảnh đang được chọn"""
+        if self.results and 0 <= self.current_index < len(self.results):
+            self.open_image_external(self.results[self.current_index]['file_path'])
 
     def process_and_predict(self, image, image_index=None):
         """
         Xử lý ảnh và nhận diện biển số xe
         
-        Args:
-            image: PIL Image
-            image_index: Số thứ tự ảnh để in ra terminal
-            
         Returns:
-            tuple: (processed_image_np, detected_plates_list, detections)
+            tuple: (processed_image_np, detected_plates_list, detections, cropped_plate_img)
         """
         image_np = np.array(image)
         detected_plates = []
+        cropped_plate_img = None
         
-        # Lấy các vùng ROI của biển số với image_index
+        # Lấy các vùng ROI của biển số
         plate_regions = self.detector.get_plate_regions(image_np, image_index=image_index)
         
         detections = []
         valid_plates = []
         
-        # Bước 1: Thu thập tất cả các biển số hợp lệ
+        # Thu thập tất cả các biển số hợp lệ
         for roi, bbox in plate_regions:
-            # OCR và xử lý biển số (với warping)
             plate_info = self.ocr.process_plate(roi, apply_warping=True)
             
             if plate_info and self.ocr.is_valid_plate(plate_info):
                 valid_plates.append((plate_info, bbox, roi))
 
-        # Bước 2: Format kết quả và thêm vào danh sách detections
+        # Format kết quả
         num_plates = len(valid_plates)
         
         for i, (plate_info, bbox, roi) in enumerate(valid_plates):
             vehicle_type = plate_info['vehicle_type']
             formatted_text = plate_info['formatted_text']
             
-            # Chuẩn bị text cho UI
             prefix = f"#{i+1} " if num_plates > 1 else ""
             info_for_ui = f"{prefix}[{vehicle_type}] {formatted_text}"
             detected_plates.append(info_for_ui)
             
-            # Thêm vào danh sách detection để vẽ
+            # Lấy ảnh biển số cắt (chỉ lấy cái đầu tiên)
+            if cropped_plate_img is None:
+                cropped_plate_img = roi
+            
             detections.append({
                 'bbox': bbox,
                 'text': formatted_text,
@@ -205,21 +313,35 @@ class MultiPlateApp:
         # Vẽ các detection lên ảnh
         processed_image = self.detector.draw_detections(image_np, detections)
         
-        return processed_image, detected_plates, detections
+        return processed_image, detected_plates, detections, cropped_plate_img
 
     def process_batch(self, file_paths):
         """Bắt đầu xử lý batch trong thread riêng"""
-        # 1. Xóa kết quả cũ trên UI
-        for widget in self.scrollable_frame.winfo_children():
-            widget.destroy()
-        self.image_refs = []
+        # Dừng auto play nếu đang chạy
+        self.stop_auto_play()
         
-        # 2. Cập nhật trạng thái UI
+        # Reset dữ liệu
+        self.results = []
+        self.current_index = 0
+        self.image_refs = []
+        self.total_processing_time = 0
+        
+        # Xóa listbox
+        self.file_listbox.delete(0, tk.END)
+        
+        # Reset hiển thị
+        self.img_bbox_label.config(image='')
+        self.img_plate_label.config(image='')
+        self.plate_text_label.config(text="")
+        self.time_label.config(text="Thời gian xử lý: ---")
+        self.total_time_label.config(text="Tổng thời gian: ---")
+        
+        # Cập nhật trạng thái
         self.btn_select.config(state="disabled")
         self.btn_history.config(state="disabled")
-        self.lbl_status.config(text="Đang khởi tạo...", fg="blue")
+        self.status_label.config(text=f"Đang xử lý 0/{len(file_paths)} ảnh...")
         
-        # 3. Chạy thread xử lý
+        # Chạy thread xử lý
         threading.Thread(target=self.processing_thread, args=(file_paths,), daemon=True).start()
 
     def processing_thread(self, file_paths):
@@ -236,9 +358,9 @@ class MultiPlateApp:
         for index, file_path in enumerate(file_paths):
             stt = index + 1
             
-            # Cập nhật thông báo trạng thái
-            msg = f"Đang xử lý ảnh {stt}/{total}..."
-            self.root.after(0, lambda: self.lbl_status.config(text=msg))
+            # Cập nhật trạng thái
+            self.root.after(0, lambda s=stt, t=total: self.status_label.config(
+                text=f"Đang xử lý {s}/{t} ảnh..."))
             
             # Bắt đầu tính thời gian cho ảnh này
             image_start_time = time.time()
@@ -246,9 +368,9 @@ class MultiPlateApp:
             try:
                 print(f"\n📸 ===== ẢNH #{stt} =====\nFile: {os.path.basename(file_path)}")
                 
-                # Xử lý nặng (Detect + OCR) với STT
+                # Xử lý (Detect + OCR)
                 img_pil = Image.open(file_path)
-                processed_img_np, plates, detections = self.process_and_predict(img_pil, image_index=stt)
+                processed_img_np, plates, detections, cropped_plate = self.process_and_predict(img_pil, image_index=stt)
                 
                 result_pil = Image.fromarray(processed_img_np)
                 
@@ -266,8 +388,20 @@ class MultiPlateApp:
                 # Lưu kết quả vào History
                 self.logger.save_result(file_path, img_pil, detections, processed_image_pil=result_pil)
                 
+                # Tạo dict kết quả
+                result = {
+                    'file_path': file_path,
+                    'file_name': os.path.basename(file_path),
+                    'original_img': img_pil,
+                    'processed_img': result_pil,
+                    'cropped_plate': Image.fromarray(cropped_plate) if cropped_plate is not None else None,
+                    'plates': plates,
+                    'processing_time': image_time
+                }
+                self.results.append(result)
+                
                 # Cập nhật UI (gửi về Main Thread)
-                self.root.after(0, self.add_result_row, index, file_path, img_pil, result_pil, plates)
+                self.root.after(0, self.add_result_to_list, index, result)
                 
             except Exception as e:
                 image_end_time = time.time()
@@ -277,121 +411,184 @@ class MultiPlateApp:
                 print(f"❌ Lỗi xử lý ảnh #{stt}: {e}")
                 import traceback
                 traceback.print_exc()
+                
+                # Thêm kết quả lỗi
+                result = {
+                    'file_path': file_path,
+                    'file_name': os.path.basename(file_path),
+                    'original_img': None,
+                    'processed_img': None,
+                    'cropped_plate': None,
+                    'plates': [],
+                    'processing_time': image_time,
+                    'error': str(e)
+                }
+                self.results.append(result)
+                self.root.after(0, self.add_result_to_list, index, result)
 
         # Hoàn tất
         self.root.after(0, self.on_processing_finished)
 
+    def add_result_to_list(self, index, result):
+        """Thêm kết quả vào listbox"""
+        file_name = result['file_name']
+        
+        # Thêm vào listbox
+        self.file_listbox.insert(tk.END, file_name)
+        
+        # Nếu là ảnh đầu tiên, hiển thị ngay
+        if index == 0:
+            self.file_listbox.selection_set(0)
+            self.display_result(0)
+
     def on_processing_finished(self):
         """Được gọi khi thread xử lý xong"""
-        # Tính tổng thời gian
         if self.processing_start_time:
-            total_time = time.time() - self.processing_start_time
+            self.total_processing_time = time.time() - self.processing_start_time
             total_images = len(self.image_processing_times)
-            avg_time = sum(self.image_processing_times) / len(self.image_processing_times) if self.image_processing_times else 0
             
             print("\n" + "=" * 60)
             print(f"🎉 ĐÃ NHẬN DIỆN XONG {total_images} ẢNH!")
-            
-            # THỰC TẾ: Đo lường và phân tích thời gian
-            ai_processing_time = sum(self.image_processing_times)  # Thời gian AI thuần túy
-            overhead_time = total_time - ai_processing_time  # Overhead (UI, I/O, etc.)
-            
-            # Ước tính phân bố dựa trên benchmark thực tế:
-            # - YOLO Detection thường chiếm 60-70% thời gian AI
-            # - OCR + Preprocessing chiếm 30-40% thời gian AI
-            estimated_load_time = total_images * 0.05  # Measured: ~0.05s/image load
-            estimated_detection = ai_processing_time * 0.65  # Benchmark: YOLO ~65%
-            estimated_ocr = ai_processing_time * 0.35  # Benchmark: OCR ~35%
-            estimated_ui = overhead_time  # Còn lại
-            
-            print("THỜI GIAN XỬ LÝ:")
-            print(f"   • Tổng {total_time:.2f}s bao gồm:")
-            print(f"     - Tải ảnh từ file: ~{estimated_load_time:.1f}s")
-            print(f"     - YOLOv8 Detection: ~{estimated_detection:.1f}s")
-            print(f"     - EasyOCR + Preprocessing: ~{estimated_ocr:.1f}s")
-            print(f"     - Lưu History + UI update: ~{estimated_ui:.1f}s")
+            print(f"⏱️ Tổng thời gian: {self.total_processing_time:.2f}s")
             print("=" * 60)
             
-            self.lbl_status.config(text=f"Hoàn thành {total_images} ảnh trong {total_time:.1f}s!", fg="green")
+            self.status_label.config(text=f"Hoàn thành {total_images} ảnh!")
+            self.total_time_label.config(text=f"Tổng thời gian: {self.total_processing_time:.2f}s")
         else:
-            self.lbl_status.config(text="Đã nhận diện xong!", fg="green")
+            self.status_label.config(text="Đã hoàn thành!")
             
         self.btn_select.config(state="normal")
         self.btn_history.config(state="normal")
 
-    def add_result_row(self, index, file_path, img_pil, result_pil, plates):
-        """Thêm một dòng kết quả vào giao diện (chạy trên Main Thread)"""
-        stt = index + 1
-
-        # Khung chứa 1 dòng
-        row_frame = tk.Frame(self.scrollable_frame, bg="white", bd=2, relief="groove")
-        row_frame.pack(fill="x", padx=10, pady=10)
-
-        # Header
-        lbl_header = tk.Label(row_frame, text=f"Hồ sơ ảnh #{stt}", font=("Arial", 11, "bold"), bg="#ddd",
-                              anchor="w", padx=10)
-        lbl_header.pack(fill="x")
-
-        content_frame = tk.Frame(row_frame, bg="white")
-        content_frame.pack(pady=10)
-
-        # --- CỘT 1: ẢNH GỐC ---
-        col1 = tk.Frame(content_frame, bg="white")
-        col1.grid(row=0, column=0, padx=20)
-
-        # Resize to hơn (450px)
-        thumb_orig = self.resize_image(img_pil, fixed_height=450)
-        tk_thumb_orig = ImageTk.PhotoImage(thumb_orig)
-        self.image_refs.append(tk_thumb_orig)
-
-        lbl_img1 = tk.Label(col1, image=tk_thumb_orig, cursor="hand2")
-        lbl_img1.pack()
-        # Gán sự kiện Click đúp -> Mở ảnh gốc full size
-        lbl_img1.bind("<Double-Button-1>", lambda e, path=file_path: self.open_image_external(e, path))
-
-        tk.Label(col1, text="Ảnh gốc (Click đúp để phóng to)", font=("Arial", 10, "italic"), bg="white").pack()
-
-        # --- CỘT 2: ẢNH XỬ LÝ ---
-        col2 = tk.Frame(content_frame, bg="white")
-        col2.grid(row=0, column=1, padx=20)
-
-        thumb_res = self.resize_image(result_pil, fixed_height=450)
-        tk_thumb_res = ImageTk.PhotoImage(thumb_res)
-        self.image_refs.append(tk_thumb_res)
-
-        tk.Label(col2, image=tk_thumb_res).pack()
-        tk.Label(col2, text="Ảnh đã nhận diện", font=("Arial", 10, "italic"), bg="white").pack()
-
-        # --- CỘT 3: KẾT QUẢ ---
-        col3 = tk.Frame(content_frame, bg="white")
-        col3.grid(row=0, column=2, padx=30, sticky="n")  # Sticky n để chữ nằm phía trên
-
-        # Tạo khoảng trống phía trên để chữ ngang tầm mắt hơn
-        tk.Frame(col3, height=50, bg="white").pack()
-
-        if plates:
-            result_text = ""
-            for p in plates:
+    def display_result(self, index):
+        """Hiển thị kết quả của ảnh tại index"""
+        if not self.results or index < 0 or index >= len(self.results):
+            return
+        
+        self.current_index = index
+        result = self.results[index]
+        
+        # Cập nhật selection trong listbox
+        self.file_listbox.selection_clear(0, tk.END)
+        self.file_listbox.selection_set(index)
+        self.file_listbox.see(index)
+        
+        # ========== Hiển thị ảnh bounding box (cột 1) ==========
+        if result['processed_img']:
+            # Resize để fit vào cột
+            processed_img = self.resize_image_to_fit(result['processed_img'], 
+                                                      max_width=600, max_height=500)
+            tk_processed = ImageTk.PhotoImage(processed_img)
+            self.image_refs.append(tk_processed)
+            self.img_bbox_label.config(image=tk_processed)
+        else:
+            self.img_bbox_label.config(image='', text="Lỗi xử lý ảnh")
+        
+        # ========== Hiển thị ảnh biển số cắt (cột 2) ==========
+        if result['cropped_plate']:
+            cropped_img = self.resize_image_to_fit(result['cropped_plate'], 
+                                                    max_width=350, max_height=200)
+            tk_cropped = ImageTk.PhotoImage(cropped_img)
+            self.image_refs.append(tk_cropped)
+            self.img_plate_label.config(image=tk_cropped)
+        else:
+            self.img_plate_label.config(image='', text="Không có biển số")
+        
+        # ========== Hiển thị text biển số ==========
+        if result['plates']:
+            plate_text = ""
+            for p in result['plates']:
                 if "]" in p:
                     type_part, number_part = p.split("]", 1)
-                    type_clean = type_part.replace("[", "")
-                    result_text += f"{type_clean} - {number_part.strip()}\n"
+                    plate_text += number_part.strip() + "\n"
                 else:
-                    result_text += f"{p}\n"
-
-            tk.Label(col3, text=result_text, font=("Arial", 20, "bold"), fg="#2E7D32", bg="white",
-                     justify="left").pack()
+                    plate_text += p + "\n"
+            self.plate_text_label.config(text=plate_text.strip(), fg="#1565C0")
         else:
-            tk.Label(col3, text="Không tìm thấy\nbiển số", font=("Arial", 16), fg="red", bg="white").pack()
-            
-        # Cập nhật UI ngay lập tức
-        self.root.update_idletasks()
+            self.plate_text_label.config(text="Không nhận diện được", fg="#D32F2F")
+        
+        # ========== Hiển thị thời gian xử lý ==========
+        self.time_label.config(text=f"Thời gian xử lý: {result['processing_time']:.2f}s")
+        
+        # ========== Hiển thị tổng thời gian ==========
+        if self.total_processing_time > 0:
+            self.total_time_label.config(text=f"Tổng thời gian: {self.total_processing_time:.2f}s")
 
-    def resize_image(self, img_pil, fixed_height):
-        # Hàm resize giữ nguyên tỉ lệ
-        h_percent = (fixed_height / float(img_pil.size[1]))
-        w_size = int((float(img_pil.size[0]) * float(h_percent)))
-        return img_pil.resize((w_size, fixed_height), Image.Resampling.LANCZOS)
+    def resize_image_to_fit(self, img_pil, max_width, max_height):
+        """Resize ảnh để vừa với kích thước cho trước, giữ tỷ lệ"""
+        width, height = img_pil.size
+        
+        # Tính tỷ lệ scale
+        scale_w = max_width / width
+        scale_h = max_height / height
+        scale = min(scale_w, scale_h, 1.0)  # Không phóng to quá kích thước gốc
+        
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        
+        return img_pil.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+    def on_file_select(self, event):
+        """Xử lý sự kiện chọn file trong listbox"""
+        selection = self.file_listbox.curselection()
+        if selection:
+            index = selection[0]
+            self.display_result(index)
+
+    def on_file_double_click(self, event):
+        """Xử lý sự kiện double click vào file trong listbox"""
+        selection = self.file_listbox.curselection()
+        if selection:
+            index = selection[0]
+            if self.results and 0 <= index < len(self.results):
+                self.open_image_external(self.results[index]['file_path'])
+
+    def next_image(self):
+        """Di chuyển đến ảnh tiếp theo"""
+        if self.results and self.current_index < len(self.results) - 1:
+            self.display_result(self.current_index + 1)
+
+    def prev_image(self):
+        """Di chuyển đến ảnh trước đó"""
+        if self.results and self.current_index > 0:
+            self.display_result(self.current_index - 1)
+
+    def toggle_auto_play(self):
+        """Bật/tắt chế độ tự động duyệt ảnh"""
+        if self.auto_playing:
+            self.stop_auto_play()
+        else:
+            self.start_auto_play()
+
+    def start_auto_play(self):
+        """Bắt đầu tự động duyệt ảnh"""
+        if not self.results:
+            return
+        
+        self.auto_playing = True
+        self.btn_auto.config(text="Dừng", bg="#F44336")
+        self.auto_play_next()
+
+    def stop_auto_play(self):
+        """Dừng tự động duyệt ảnh"""
+        self.auto_playing = False
+        self.btn_auto.config(text="Tự động", bg="#2196F3")
+        if self.auto_play_id:
+            self.root.after_cancel(self.auto_play_id)
+            self.auto_play_id = None
+
+    def auto_play_next(self):
+        """Tự động chuyển sang ảnh tiếp theo"""
+        if not self.auto_playing or not self.results:
+            return
+        
+        if self.current_index < len(self.results) - 1:
+            self.display_result(self.current_index + 1)
+            # Đợi 2 giây rồi chuyển tiếp
+            self.auto_play_id = self.root.after(2000, self.auto_play_next)
+        else:
+            # Đã hết ảnh, dừng tự động
+            self.stop_auto_play()
 
 
 if __name__ == "__main__":
