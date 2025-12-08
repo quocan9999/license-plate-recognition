@@ -1,7 +1,7 @@
 """Ứng dụng GUI cho nhận diện biển số xe với xử lý hàng loạt.
 
 Module này cung cấp giao diện người dùng để phát hiện và nhận diện
-biển số xe từ ảnh sử dụng YOLOv8 và EasyOCR.
+biển số xe từ ảnh sử dụng YOLOv8 và PaddleOCR.
 """
 
 import os
@@ -42,7 +42,7 @@ class MultiPlateApp:
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.drop_files)
 
-        # Khởi tạo detector và OCR (EasyOCR với Warping)
+        # Khởi tạo detector và OCR (PaddleOCR với Warping)
         self.detector = LicensePlateDetector()
         self.ocr = LicensePlateOCR()
         self.logger = HistoryLogger()
