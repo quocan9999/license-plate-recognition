@@ -172,7 +172,7 @@ class LicensePlateDetector:
                 box_color = color
             
             # Tính toán scale dựa trên kích thước ảnh
-            img_h, img_w = image_copy.shape[:2]
+            _, img_w = image_copy.shape[:2]
             
             # Scale factor: chuẩn hóa theo chiều rộng 640px (kích thước chuẩn của YOLO)
             # Nếu ảnh rộng 640px -> scale = 1.0

@@ -1,13 +1,19 @@
-import tkinter as tk
-from tkinter import filedialog, ttk
-from PIL import Image, ImageTk
-import numpy as np
+"""Ứng dụng GUI cho nhận diện biển số xe với xử lý hàng loạt.
+
+Module này cung cấp giao diện người dùng để phát hiện và nhận diện
+biển số xe từ ảnh sử dụng YOLOv8 và EasyOCR.
+"""
+
 import os
 import platform
 import subprocess
 import re
 import threading
 import time
+import tkinter as tk
+from tkinter import filedialog
+from PIL import Image, ImageTk
+import numpy as np
 from tkinterdnd2 import DND_FILES, TkinterDnD
 from modules.detection import LicensePlateDetector
 from modules.ocr import LicensePlateOCR
@@ -16,6 +22,12 @@ from modules.config import HISTORY_DIR
 
 
 class MultiPlateApp:
+    """Class chính cho ứng dụng GUI nhận diện biển số xe.
+
+    Class này quản lý giao diện người dùng, xử lý ảnh,
+    và điều phối giữa các module phát hiện và OCR.
+    """
+
     def __init__(self, root):
         self.root = root
         self.root.title("Hệ thống Nhận diện Biển số xe")
@@ -510,7 +522,7 @@ class MultiPlateApp:
             plate_text = ""
             for p in result['plates']:
                 if "]" in p:
-                    type_part, number_part = p.split("]", 1)
+                    _, number_part = p.split("]", 1)
                     plate_text += number_part.strip() + "\n"
                 else:
                     plate_text += p + "\n"

@@ -1,3 +1,9 @@
+"""Script để dọn dẹp thư mục lịch sử và file CSV.
+
+Module này cung cấp chức năng xóa tất cả ảnh đã xử lý
+và reset file CSV lịch sử.
+"""
+
 import os
 import shutil
 from modules.config import HISTORY_DIR

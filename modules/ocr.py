@@ -188,7 +188,7 @@ class LicensePlateOCR:
             """
             method = candidate['preprocessing_method']
             confidence = candidate['confidence']
-            raw_text = candidate.get('raw_text', '')
+            # raw_text = candidate.get('raw_text', '')  # Unused
             clean_text = candidate.get('clean_text', '')
             
             # Điểm cơ bản = confidence (0.0-1.0)

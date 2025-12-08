@@ -84,7 +84,7 @@ class HistoryLogger:
                     vehicle_type = det['vehicle_type']
                     roi = det['roi'] # numpy array (RGB)
                     preprocessed_image = det.get('preprocessed_image')
-                    preprocessing_method = det.get('preprocessing_method', 'unknown')
+                    # preprocessing_method = det.get('preprocessing_method', 'unknown')  # Unused
                     intermediate_images = det.get('intermediate_images', {})
                     
                     # Clean text cho tên file
