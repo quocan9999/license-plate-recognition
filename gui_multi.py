@@ -552,27 +552,41 @@ class MultiPlateApp:
 
     def on_arrow_up(self, event):
         """Xử lý phím mũi tên lên"""
-        if self.results and self.current_index > 0:
-            # Cancel default behavior
-            self.display_result(self.current_index - 1)
+        if self.results:
+            if self.current_index > 0:
+                self.display_result(self.current_index - 1)
+            else:
+                # Đã ở ảnh đầu, quay lại ảnh cuối
+                self.display_result(len(self.results) - 1)
             return "break"
 
     def on_arrow_down(self, event):
         """Xử lý phím mũi tên xuống"""
-        if self.results and self.current_index < len(self.results) - 1:
-            # Cancel default behavior
-            self.display_result(self.current_index + 1)
+        if self.results:
+            if self.current_index < len(self.results) - 1:
+                self.display_result(self.current_index + 1)
+            else:
+                # Đã ở ảnh cuối, quay lại ảnh đầu
+                self.display_result(0)
             return "break"
 
     def next_image(self):
         """Di chuyển đến ảnh tiếp theo"""
-        if self.results and self.current_index < len(self.results) - 1:
-            self.display_result(self.current_index + 1)
+        if self.results:
+            if self.current_index < len(self.results) - 1:
+                self.display_result(self.current_index + 1)
+            else:
+                # Đã ở ảnh cuối, quay lại ảnh đầu
+                self.display_result(0)
 
     def prev_image(self):
         """Di chuyển đến ảnh trước đó"""
-        if self.results and self.current_index > 0:
-            self.display_result(self.current_index - 1)
+        if self.results:
+            if self.current_index > 0:
+                self.display_result(self.current_index - 1)
+            else:
+                # Đã ở ảnh đầu, quay lại ảnh cuối
+                self.display_result(len(self.results) - 1)
 
     def toggle_auto_play(self):
         """Bật/tắt chế độ tự động duyệt ảnh"""
@@ -605,11 +619,12 @@ class MultiPlateApp:
         
         if self.current_index < len(self.results) - 1:
             self.display_result(self.current_index + 1)
-            # Đợi 2 giây rồi chuyển tiếp
-            self.auto_play_id = self.root.after(2000, self.auto_play_next)
         else:
-            # Đã hết ảnh, dừng tự động
-            self.stop_auto_play()
+            # Đã hết ảnh, quay lại ảnh đầu tiên
+            self.display_result(0)
+        
+        # Đợi 2 giây rồi chuyển tiếp
+        self.auto_play_id = self.root.after(2000, self.auto_play_next)
 
 
 if __name__ == "__main__":
