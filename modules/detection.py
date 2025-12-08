@@ -155,6 +155,13 @@ class LicensePlateDetector:
         """
         image_copy = image.copy()
         num_detections = len(detections)
+        img_h, img_w = image_copy.shape[:2]
+        
+        # Tính toán scale factor dựa trên kích thước ảnh
+        scale_factor = max(1.0, img_w / 640.0)
+        
+        # Lưu lại các vùng đã vẽ text để tránh đè lên nhau
+        used_text_regions = []
         
         for i, detection in enumerate(detections):
             bbox = detection['bbox']
@@ -170,14 +177,6 @@ class LicensePlateDetector:
                 box_color = COLOR_CAR
             else:
                 box_color = color
-            
-            # Tính toán scale dựa trên kích thước ảnh
-            _, img_w = image_copy.shape[:2]
-            
-            # Scale factor: chuẩn hóa theo chiều rộng 640px (kích thước chuẩn của YOLO)
-            # Nếu ảnh rộng 640px -> scale = 1.0
-            # Nếu ảnh rộng 1920px -> scale = 3.0
-            scale_factor = max(1.0, img_w / 640.0)
             
             # Tính độ dày nét vẽ động
             dynamic_thickness = max(2, int(thickness * scale_factor))
@@ -195,31 +194,83 @@ class LicensePlateDetector:
                     display_text = f"#{i+1} {display_text}"
                 
                 # Tính font scale và độ dày chữ động
-                dynamic_font_scale = max(1.2, TEXT_FONT_SCALE * scale_factor * 1.8)
-                dynamic_text_thickness = max(2, int(TEXT_THICKNESS * scale_factor))
+                dynamic_font_scale = max(0.8, TEXT_FONT_SCALE * scale_factor * 1.2)
+                dynamic_text_thickness = max(2, int(TEXT_THICKNESS * scale_factor * 0.8))
 
                 # Tính kích thước chữ để vẽ nền
                 (w, h), _ = cv2.getTextSize(display_text, cv2.FONT_HERSHEY_SIMPLEX, dynamic_font_scale, dynamic_text_thickness)
                 
-                # Tính toán vị trí vẽ text
-                text_x = x1
-                text_y = y1 - 10
+                padding = int(3 * scale_factor)
                 
-                # Nếu text bị che ở cạnh trên (y1 quá nhỏ) -> vẽ xuống dưới box
-                if y1 < h + 10:
-                    text_y = y2 + h + 10
+                # Tím vị trí tốt nhất để vẽ text (không bị đè)
+                # Thử các vị trí theo thứ tự ưu tiên: trên, dưới, trái, phải
+                positions = [
+                    (x1, y1 - h - padding * 2, 'top'),      # Phía trên bbox
+                    (x1, y2 + h + padding * 2, 'bottom'),   # Phía dưới bbox
+                    (x1, y1 + h + padding, 'inside_top'),   # Bên trong bbox (ở trên)
+                ]
+                
+                best_pos = None
+                for text_x, text_y, pos_type in positions:
+                    # Điều chỉnh nếu text vượt quá biên ảnh
+                    if text_x + w > img_w:
+                        text_x = img_w - w - 5
+                    if text_x < 0:
+                        text_x = 5
+                    if text_y < h + padding:
+                        continue  # Bỏ qua nếu vượt quá cạnh trên
+                    if text_y > img_h - padding:
+                        continue  # Bỏ qua nếu vượt quá cạnh dưới
                     
-                # Nếu text bị che ở cạnh phải (x1 + w quá lớn) -> dời sang trái
-                if text_x + w > img_w:
-                    text_x = img_w - w - 5
+                    # Tạo vùng text
+                    text_region = (text_x, text_y - h - padding, text_x + w + padding, text_y + padding)
+                    
+                    # Kiểm tra xem có bị đè lên các vùng đã vẽ không
+                    is_overlapping = False
+                    for used_region in used_text_regions:
+                        if self._regions_overlap(text_region, used_region):
+                            is_overlapping = True
+                            break
+                    
+                    if not is_overlapping:
+                        best_pos = (text_x, text_y, text_region)
+                        break
+                
+                # Nếu tất cả vị trí đều bị đè, sử dụng vị trí mặc định
+                if best_pos is None:
+                    text_x = x1
+                    text_y = y1 - h - padding * 2 if y1 > h + padding * 2 else y2 + h + padding * 2
+                    text_region = (text_x, text_y - h - padding, text_x + w + padding, text_y + padding)
+                    best_pos = (text_x, text_y, text_region)
+                
+                text_x, text_y, text_region = best_pos
+                used_text_regions.append(text_region)
                 
                 # Vẽ nền cho text
-                # Điều chỉnh tọa độ nền dựa trên vị trí text_y
-                padding = int(5 * scale_factor)
-                cv2.rectangle(image_copy, (text_x, text_y - h - padding), (text_x + w, text_y + padding), box_color, -1)
+                cv2.rectangle(image_copy, 
+                             (int(text_region[0]), int(text_region[1])), 
+                             (int(text_region[2]), int(text_region[3])), 
+                             box_color, -1)
                 
                 # Vẽ text
-                cv2.putText(image_copy, display_text, (text_x, text_y),
+                cv2.putText(image_copy, display_text, (int(text_x), int(text_y)),
                            cv2.FONT_HERSHEY_SIMPLEX, dynamic_font_scale, (255, 255, 255), dynamic_text_thickness)
+        
+        return image_copy
+    
+    def _regions_overlap(self, region1, region2):
+        """
+        Kiểm tra xem 2 vùng có giao nhau không
+        Mỗi region là tuple (x1, y1, x2, y2)
+        """
+        x1_1, y1_1, x2_1, y2_1 = region1
+        x1_2, y1_2, x2_2, y2_2 = region2
+        
+        # Kiểm tra không giao nhau
+        if x2_1 < x1_2 or x2_2 < x1_1:
+            return False
+        if y2_1 < y1_2 or y2_2 < y1_1:
+            return False
+        return True
         
         return image_copy
