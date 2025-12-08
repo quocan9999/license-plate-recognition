@@ -79,35 +79,38 @@ class MultiPlateApp:
                  font=("Arial", 10, "italic")).pack()
 
         # ========== MAIN CONTENT FRAME ==========
-        self.main_frame = tk.Frame(self.root, bg="white")
-        self.main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        # Container chính với viền đen
+        self.main_container = tk.Frame(self.root, bg="white", bd=2, relief="solid")
+        self.main_container.pack(fill="both", expand=True, padx=10, pady=10)
         
-        # Cấu hình grid cho 3 cột
+        # Frame nội dung bên trong (không viền)
+        self.main_frame = tk.Frame(self.main_container, bg="white")
+        self.main_frame.pack(fill="both", expand=True)
+        
+        # Cấu hình grid cho 3 cột + 2 separator
         self.main_frame.columnconfigure(0, weight=3)  # Cột 1: Ảnh bounding box
-        self.main_frame.columnconfigure(1, weight=2)  # Cột 2: Ảnh biển số cắt + info
-        self.main_frame.columnconfigure(2, weight=1)  # Cột 3: Danh sách file
+        self.main_frame.columnconfigure(1, weight=0, minsize=2)  # Separator 1
+        self.main_frame.columnconfigure(2, weight=2)  # Cột 2: Ảnh biển số cắt + info
+        self.main_frame.columnconfigure(3, weight=0, minsize=2)  # Separator 2
+        self.main_frame.columnconfigure(4, weight=1)  # Cột 3: Danh sách file
         self.main_frame.rowconfigure(0, weight=1)
 
         # ========== CỘT 1: Ảnh biển số đã vẽ bounding box ==========
-        self.col1_frame = tk.Frame(self.main_frame, bg="white", bd=2, relief="solid")
-        self.col1_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        
-        # Label mô tả
-        tk.Label(self.col1_frame, text="Mô tả: Đây là ảnh biển số đã được vẽ bounding box lên", 
-                 font=("Arial", 11), bg="white", fg="#333", wraplength=400).pack(pady=10)
+        self.col1_frame = tk.Frame(self.main_frame, bg="white")
+        self.col1_frame.grid(row=0, column=0, sticky="nsew")
         
         # Canvas để hiển thị ảnh
         self.img_bbox_label = tk.Label(self.col1_frame, bg="white", cursor="hand2")
         self.img_bbox_label.pack(expand=True, fill="both", padx=10, pady=10)
         self.img_bbox_label.bind("<Double-Button-1>", self.open_current_image)
 
+        # ========== SEPARATOR 1 ==========
+        self.sep1 = tk.Frame(self.main_frame, bg="black", width=2)
+        self.sep1.grid(row=0, column=1, sticky="ns")
+
         # ========== CỘT 2: Ảnh biển số cắt + thông tin ==========
-        self.col2_frame = tk.Frame(self.main_frame, bg="#FFFDE7", bd=2, relief="solid", highlightbackground="#FFC107", highlightthickness=2)
-        self.col2_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        
-        # Label mô tả
-        tk.Label(self.col2_frame, text="Mô tả: Đây là ảnh vùng biển số đã cắt ra", 
-                 font=("Arial", 11), bg="#FFFDE7", fg="#F57C00", wraplength=300).pack(pady=10)
+        self.col2_frame = tk.Frame(self.main_frame, bg="#FFFDE7")
+        self.col2_frame.grid(row=0, column=2, sticky="nsew")
         
         # Frame chứa ảnh biển số cắt
         self.plate_img_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
@@ -162,9 +165,13 @@ class MultiPlateApp:
                                   padx=15, pady=5, width=8)
         self.btn_prev.pack(side="left", padx=5)
 
+        # ========== SEPARATOR 2 ==========
+        self.sep2 = tk.Frame(self.main_frame, bg="black", width=2)
+        self.sep2.grid(row=0, column=3, sticky="ns")
+
         # ========== CỘT 3: Danh sách file ảnh ==========
-        self.col3_frame = tk.Frame(self.main_frame, bg="#E3F2FD", bd=2, relief="solid", highlightbackground="#2196F3", highlightthickness=2)
-        self.col3_frame.grid(row=0, column=2, sticky="nsew", padx=5, pady=5)
+        self.col3_frame = tk.Frame(self.main_frame, bg="#E3F2FD")
+        self.col3_frame.grid(row=0, column=4, sticky="nsew")
         
         # Label mô tả
         tk.Label(self.col3_frame, text="Danh sách ảnh", 
@@ -194,6 +201,10 @@ class MultiPlateApp:
         self.status_label = tk.Label(self.col3_frame, text="Chưa có ảnh", 
                                      font=("Arial", 10, "italic"), bg="#E3F2FD", fg="#666")
         self.status_label.pack(pady=5)
+        
+        # Bind phím mũi tên lên/xuống cho toàn bộ cửa sổ
+        self.root.bind("<Up>", self.on_arrow_up)
+        self.root.bind("<Down>", self.on_arrow_down)
 
     def bind_mouse_scroll(self):
         """Bind mouse scroll cho listbox"""
@@ -531,10 +542,6 @@ class MultiPlateApp:
     def on_file_select(self, event):
         """Xử lý sự kiện chọn file trong listbox"""
         selection = self.file_listbox.curselection()
-        if selection:
-            index = selection[0]
-            self.display_result(index)
-
     def on_file_double_click(self, event):
         """Xử lý sự kiện double click vào file trong listbox"""
         selection = self.file_listbox.curselection()
@@ -542,6 +549,20 @@ class MultiPlateApp:
             index = selection[0]
             if self.results and 0 <= index < len(self.results):
                 self.open_image_external(self.results[index]['file_path'])
+
+    def on_arrow_up(self, event):
+        """Xử lý phím mũi tên lên"""
+        if self.results and self.current_index > 0:
+            # Cancel default behavior
+            self.display_result(self.current_index - 1)
+            return "break"
+
+    def on_arrow_down(self, event):
+        """Xử lý phím mũi tên xuống"""
+        if self.results and self.current_index < len(self.results) - 1:
+            # Cancel default behavior
+            self.display_result(self.current_index + 1)
+            return "break"
 
     def next_image(self):
         """Di chuyển đến ảnh tiếp theo"""
