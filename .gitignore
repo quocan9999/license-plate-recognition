@@ -209,3 +209,9 @@ __marimo__/
 # History
 History/
 history/
+
+#diagrams
+diagrams/
+
+#debug file
+debug_trace_gui.py
