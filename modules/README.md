@@ -102,7 +102,7 @@ plate_info = ocr.process_plate(roi, apply_warping=True)
 -   `detect_and_warp_plate(roi)` - Tự động phát hiện góc và nắn thẳng biển số
 -   `apply_clahe(image)` - Cân bằng sáng cục bộ
 -   `apply_super_resolution(image)` - Phóng to ảnh (Đã tắt mặc định để tối ưu tốc độ)
--   `four_point_transform(image, pts)` - Biến đổi hình học
+-   `four_point_transform_enhanced(image, pts)` - Biến đổi hình học với validation
 
 Ví dụ sử dụng:
 

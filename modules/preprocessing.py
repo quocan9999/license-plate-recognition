@@ -98,59 +98,6 @@ def apply_super_resolution(image: np.ndarray, scale: int = UPSCALE_SCALE) -> np.
     height, width = image.shape[:2]
     return cv2.resize(image, (width * scale, height * scale), interpolation=cv2.INTER_CUBIC)
 
-def four_point_transform(image: np.ndarray, pts: np.ndarray) -> np.ndarray:
-    """
-    Perspective transform để nắn thẳng ảnh dựa trên 4 điểm
-    IMPROVED: Thêm error handling và validation
-    
-    Args:
-        image: Ảnh đầu vào
-        pts: 4 điểm góc của vùng cần transform
-        
-    Returns:
-        Ảnh đã được nắn thẳng
-    """
-    try:
-        rect = order_points(pts)
-        (tl, tr, br, bl) = rect
-        
-        # Tính chiều rộng của ảnh mới
-        widthA = np.sqrt(((br[0] - bl[0]) ** 2) + ((br[1] - bl[1]) ** 2))
-        widthB = np.sqrt(((tr[0] - tl[0]) ** 2) + ((tr[1] - tl[1]) ** 2))
-        maxWidth = max(int(widthA), int(widthB))
-        
-        # Tính chiều cao của ảnh mới
-        heightA = np.sqrt(((tr[0] - br[0]) ** 2) + ((tr[1] - br[1]) ** 2))
-        heightB = np.sqrt(((tl[0] - bl[0]) ** 2) + ((tl[1] - bl[1]) ** 2))
-        maxHeight = max(int(heightA), int(heightB))
-        
-        # Minimum size validation
-        if maxWidth < 10 or maxHeight < 10:
-            print(f"⚠️ Warped size too small: {maxWidth}x{maxHeight}")
-            return image
-        
-        # Maximum size validation (prevent memory issues)
-        if maxWidth > 2000 or maxHeight > 2000:
-            print(f"⚠️ Warped size too large: {maxWidth}x{maxHeight}")
-            return image
-        
-        # Tạo điểm đích cho perspective transform
-        dst = np.array([
-            [0, 0],
-            [maxWidth - 1, 0],
-            [maxWidth - 1, maxHeight - 1],
-            [0, maxHeight - 1]
-        ], dtype="float32")
-        
-        # Tính ma trận perspective transform và áp dụng
-        M = cv2.getPerspectiveTransform(rect, dst)
-        warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
-        
-        return warped
-    except Exception as e:
-        print(f"⚠️ Four point transform error: {e}")
-        return image
-
 def detect_and_warp_plate(roi: np.ndarray) -> Tuple[np.ndarray, str]:
     """
     ENHANCED: Tự động phát hiện góc biển số và nắn thẳng với thuật toán mạnh hơn
