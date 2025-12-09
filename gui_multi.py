@@ -423,6 +423,17 @@ class MultiPlateApp:
                     if cp is not None:
                         cropped_plates_pil.append(Image.fromarray(cp))
                 
+                # Lấy các ảnh đã qua tiền xử lý từ detections
+                preprocessed_images_pil = []
+                for det in detections:
+                    preproc_img = det.get('preprocessed_image')
+                    if preproc_img is not None:
+                        # Chuyển numpy array sang PIL Image
+                        if len(preproc_img.shape) == 2:  # Grayscale
+                            preprocessed_images_pil.append(Image.fromarray(preproc_img, mode='L'))
+                        else:
+                            preprocessed_images_pil.append(Image.fromarray(preproc_img))
+                
                 result = {
                     'file_path': file_path,
                     'file_name': os.path.basename(file_path),
@@ -430,6 +441,7 @@ class MultiPlateApp:
                     'processed_img': result_pil,
                     'cropped_plate': Image.fromarray(cropped_plate) if cropped_plate is not None else None,
                     'cropped_plates': cropped_plates_pil,  # Danh sách tất cả biển số cắt
+                    'preprocessed_images': preprocessed_images_pil,  # Danh sách ảnh đã qua tiền xử lý
                     'plates': plates,
                     'processing_time': image_time
                 }
@@ -455,6 +467,7 @@ class MultiPlateApp:
                     'processed_img': None,
                     'cropped_plate': None,
                     'cropped_plates': [],  # Danh sách rỗng khi lỗi
+                    'preprocessed_images': [],  # Danh sách rỗng khi lỗi
                     'plates': [],
                     'processing_time': image_time,
                     'error': str(e)
@@ -587,6 +600,65 @@ class MultiPlateApp:
                 no_plate_label = tk.Label(self.plate_img_frame, text="Không có biển số", 
                                          font=("Arial", 12), fg="#666", bg="#FFFDE7")
                 no_plate_label.pack(expand=True)
+        
+        # ========== Hiển thị ảnh đã qua tiền xử lý ==========
+        preprocessed_images = result.get('preprocessed_images', [])
+        
+        if preprocessed_images and len(preprocessed_images) > 0:
+            # Thêm label mô tả
+            preproc_label = tk.Label(self.plate_img_frame, text="📷 Ảnh đã qua tiền xử lý:", 
+                                     font=("Arial", 10, "bold"), fg="#388E3C", bg="#FFFDE7")
+            preproc_label.pack(pady=(15, 5))
+            
+            # Frame chứa các ảnh tiền xử lý
+            preproc_container = tk.Frame(self.plate_img_frame, bg="#FFFDE7")
+            preproc_container.pack(fill="x", padx=5)
+            
+            num_preproc = len(preprocessed_images)
+            
+            # Tính số cột dựa trên số lượng
+            if num_preproc <= 2:
+                num_cols_preproc = num_preproc
+            elif num_preproc <= 4:
+                num_cols_preproc = 2
+            else:
+                num_cols_preproc = 3
+            
+            # Tính kích thước ảnh
+            max_width_preproc = max(80, 250 // num_cols_preproc)
+            max_height_preproc = max(50, 100)
+            
+            for i, preproc_img in enumerate(preprocessed_images):
+                row = i // num_cols_preproc
+                col = i % num_cols_preproc
+                
+                # Frame chứa từng ảnh tiền xử lý
+                preproc_item = tk.Frame(preproc_container, bg="#FFFDE7", padx=3, pady=3)
+                preproc_item.grid(row=row, column=col, sticky="nsew")
+                
+                # Label số thứ tự
+                tk.Label(preproc_item, text=f"#{i+1}", 
+                        font=("Arial", 8), fg="#388E3C", bg="#FFFDE7").pack()
+                
+                # Hiển thị ảnh
+                # Convert grayscale to RGB for display if needed
+                if preproc_img.mode == 'L':
+                    display_img = preproc_img.convert('RGB')
+                else:
+                    display_img = preproc_img
+                
+                resized_preproc = self.resize_image_to_fit(display_img, 
+                                                           max_width=max_width_preproc, 
+                                                           max_height=max_height_preproc)
+                tk_preproc = ImageTk.PhotoImage(resized_preproc)
+                self.image_refs.append(tk_preproc)
+                
+                preproc_img_label = tk.Label(preproc_item, image=tk_preproc, bg="#FFFDE7")
+                preproc_img_label.pack()
+            
+            # Cấu hình grid
+            for c in range(num_cols_preproc):
+                preproc_container.columnconfigure(c, weight=1)
         
         # ========== Hiển thị text biển số ==========
         # Hiển thị đầy đủ thông tin: số thứ tự + loại xe + biển số
