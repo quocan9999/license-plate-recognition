@@ -1,13 +1,14 @@
 """
 Module OCR cho nhận diện ký tự biển số xe
-Sử dụng EasyOCR với Warping (nắn thẳng biển số)
+Sử dụng PaddleOCR với Warping (nắn thẳng biển số)
 """
 
 
 import re
 from typing import List, Dict, Tuple, Optional, Any
 import numpy as np
-import easyocr
+import cv2
+from paddleocr import PaddleOCR
 from .preprocessing import preprocess_for_ocr
 from .utils import classify_vehicle, fix_plate_chars, format_plate
 from .config import OCR_LANGUAGES, OCR_GPU
@@ -16,32 +17,96 @@ from .config import OCR_LANGUAGES, OCR_GPU
 class LicensePlateOCR:
     """
     Class OCR cho nhận diện ký tự biển số xe Việt Nam
-    Sử dụng EasyOCR với Warping
+    Sử dụng PaddleOCR với Warping
     """
     
     def __init__(self, languages: List[str] = OCR_LANGUAGES, gpu: bool = OCR_GPU):
         """
-        Khởi tạo EasyOCR reader
+        Khởi tạo PaddleOCR reader
         
         Args:
-            languages: Danh sách ngôn ngữ hỗ trợ
+            languages: Danh sách ngôn ngữ hỗ trợ (PaddleOCR sử dụng 'en', 'vi', etc.)
             gpu: Sử dụng GPU hay không
         """
-        self.reader = easyocr.Reader(languages, gpu=gpu)
-        print(f"✓ Đã khởi tạo EasyOCR (GPU: {gpu}) với Warping")
+        # PaddleOCR hỗ trợ nhiều ngôn ngữ: 'en' (English), 'vi' (Vietnamese), etc.
+        # Sử dụng 'en' cho biển số xe vì chủ yếu là ký tự Latin và số
+        use_gpu = gpu if gpu else False
+        
+        # Xác định ngôn ngữ cho PaddleOCR
+        # PaddleOCR chỉ hỗ trợ 1 ngôn ngữ tại một thời điểm
+        lang = 'en'  # Mặc định tiếng Anh cho biển số xe
+        if isinstance(languages, list) and len(languages) > 0:
+            if 'vi' in languages:
+                lang = 'vi'
+            elif 'en' in languages:
+                lang = 'en'
+        elif isinstance(languages, str):
+            lang = languages
+        
+        # PaddleOCR v3.x sử dụng API mới
+        # Tắt các tính năng không cần thiết để tăng tốc
+        self.reader = PaddleOCR(
+            use_doc_orientation_classify=False,  # Tắt phân loại hướng tài liệu
+            use_doc_unwarping=False,  # Tắt unwarping tài liệu (đã xử lý trước đó)
+            use_textline_orientation=False,  # Tắt xoay text tự động
+            lang=lang,
+            text_det_thresh=0.3,  # Ngưỡng phát hiện text
+            text_det_box_thresh=0.5,  # Ngưỡng box
+        )
+        self.lang = lang
+        print(f"✓ Đã khởi tạo PaddleOCR (GPU: {use_gpu}, Lang: {lang}) với Warping")
     
     def read_text(self, image: np.ndarray, detail: int = 1) -> List[Any]:
         """
-        Đọc text từ ảnh sử dụng EasyOCR
+        Đọc text từ ảnh sử dụng PaddleOCR
         
         Args:
             image: Ảnh đầu vào (numpy array)
             detail: 0 = chỉ text, 1 = full detail (bbox, text, conf)
             
         Returns:
-            List kết quả
+            List kết quả theo format: [[bbox, text, conf], ...]
         """
-        return self.reader.readtext(image, detail=detail)
+        # Đảm bảo ảnh là numpy array
+        if not isinstance(image, np.ndarray):
+            image = np.array(image)
+        
+        # PaddleOCR yêu cầu ảnh 3 channel (RGB/BGR)
+        # Chuyển đổi ảnh grayscale sang BGR nếu cần
+        if len(image.shape) == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        elif len(image.shape) == 3 and image.shape[2] == 1:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        
+        # PaddleOCR v3.x sử dụng method predict()
+        # Output format: [{'rec_texts': [...], 'rec_scores': [...], 'rec_polys': [...], ...}]
+        result = list(self.reader.predict(image))
+        
+        # Chuyển đổi kết quả PaddleOCR v3.x sang format tương thích EasyOCR
+        # EasyOCR format: [[bbox, text, conf], ...]
+        converted_result = []
+        
+        if result and len(result) > 0:
+            res = result[0]  # Lấy kết quả đầu tiên
+            rec_texts = res.get('rec_texts', [])
+            rec_scores = res.get('rec_scores', [])
+            rec_polys = res.get('rec_polys', [])
+            
+            for i, text in enumerate(rec_texts):
+                bbox = rec_polys[i].tolist() if i < len(rec_polys) else []
+                conf = float(rec_scores[i]) if i < len(rec_scores) else 0.0
+                
+                # Lọc chỉ giữ lại ký tự A-Z và 0-9
+                allowlist = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                filtered_text = ''.join(c for c in text.upper() if c in allowlist)
+                
+                if filtered_text:  # Chỉ thêm nếu có text hợp lệ
+                    converted_result.append([bbox, filtered_text, conf])
+        
+        if detail == 0:
+            return [item[1] for item in converted_result]
+        
+        return converted_result
     
     def _sort_ocr_results_top_to_bottom(self, ocr_output: List[Any]) -> List[Any]:
         """
@@ -50,7 +115,7 @@ class LicensePlateOCR:
         Đối với biển số 2 dòng, cần đọc dòng trên trước, sau đó dòng dưới.
         
         Args:
-            ocr_output: Kết quả từ EasyOCR [[bbox, text, conf], ...]
+            ocr_output: Kết quả từ PaddleOCR [[bbox, text, conf], ...]
             
         Returns:
             Kết quả đã được sắp xếp

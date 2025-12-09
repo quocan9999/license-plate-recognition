@@ -1,7 +1,7 @@
 """Ứng dụng GUI cho nhận diện biển số xe với xử lý hàng loạt.
 
 Module này cung cấp giao diện người dùng để phát hiện và nhận diện
-biển số xe từ ảnh sử dụng YOLOv8 và EasyOCR.
+biển số xe từ ảnh sử dụng YOLOv8 và PaddleOCR.
 """
 
 import os
@@ -42,7 +42,7 @@ class MultiPlateApp:
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.drop_files)
 
-        # Khởi tạo detector và OCR (EasyOCR với Warping)
+        # Khởi tạo detector và OCR (PaddleOCR với Warping)
         self.detector = LicensePlateDetector()
         self.ocr = LicensePlateOCR()
         self.logger = HistoryLogger()
@@ -124,12 +124,9 @@ class MultiPlateApp:
         self.col2_frame = tk.Frame(self.main_frame, bg="#FFFDE7")
         self.col2_frame.grid(row=0, column=2, sticky="nsew")
         
-        # Frame chứa ảnh biển số cắt
+        # Frame chứa ảnh biển số cắt (sẽ được tạo động trong display_result)
         self.plate_img_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
         self.plate_img_frame.pack(expand=True, fill="both", padx=10, pady=10)
-        
-        self.img_plate_label = tk.Label(self.plate_img_frame, bg="#FFFDE7")
-        self.img_plate_label.pack(expand=True)
         
         # ========== Phần hiển thị thông tin biển số ==========
         self.info_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
@@ -311,6 +308,9 @@ class MultiPlateApp:
         # Format kết quả
         num_plates = len(valid_plates)
         
+        # List chứa tất cả các ảnh biển số cắt
+        cropped_plates_list = []
+        
         for i, (plate_info, bbox, roi) in enumerate(valid_plates):
             vehicle_type = plate_info['vehicle_type']
             formatted_text = plate_info['formatted_text']
@@ -319,7 +319,10 @@ class MultiPlateApp:
             info_for_ui = f"{prefix}[{vehicle_type}] {formatted_text}"
             detected_plates.append(info_for_ui)
             
-            # Lấy ảnh biển số cắt (chỉ lấy cái đầu tiên)
+            # Lấy tất cả ảnh biển số cắt
+            cropped_plates_list.append(roi)
+            
+            # Giữ lại cropped_plate_img đầu tiên cho backward compatibility
             if cropped_plate_img is None:
                 cropped_plate_img = roi
             
@@ -336,7 +339,7 @@ class MultiPlateApp:
         # Vẽ các detection lên ảnh
         processed_image = self.detector.draw_detections(image_np, detections)
         
-        return processed_image, detected_plates, detections, cropped_plate_img
+        return processed_image, detected_plates, detections, cropped_plate_img, cropped_plates_list
 
     def process_batch(self, file_paths):
         """Bắt đầu xử lý batch trong thread riêng"""
@@ -354,7 +357,9 @@ class MultiPlateApp:
         
         # Reset hiển thị
         self.img_bbox_label.config(image='')
-        self.img_plate_label.config(image='')
+        # Xóa các widget trong plate_img_frame
+        for widget in self.plate_img_frame.winfo_children():
+            widget.destroy()
         self.plate_text_label.config(text="")
         self.time_label.config(text="Thời gian xử lý: ---")
         self.total_time_label.config(text="Tổng thời gian: ---")
@@ -393,7 +398,7 @@ class MultiPlateApp:
                 
                 # Xử lý (Detect + OCR)
                 img_pil = Image.open(file_path)
-                processed_img_np, plates, detections, cropped_plate = self.process_and_predict(img_pil, image_index=stt)
+                processed_img_np, plates, detections, cropped_plate, cropped_plates_list = self.process_and_predict(img_pil, image_index=stt)
                 
                 result_pil = Image.fromarray(processed_img_np)
                 
@@ -412,12 +417,19 @@ class MultiPlateApp:
                 self.logger.save_result(file_path, img_pil, detections, processed_image_pil=result_pil)
                 
                 # Tạo dict kết quả
+                # Chuyển đổi tất cả cropped plates sang PIL Image
+                cropped_plates_pil = []
+                for cp in cropped_plates_list:
+                    if cp is not None:
+                        cropped_plates_pil.append(Image.fromarray(cp))
+                
                 result = {
                     'file_path': file_path,
                     'file_name': os.path.basename(file_path),
                     'original_img': img_pil,
                     'processed_img': result_pil,
                     'cropped_plate': Image.fromarray(cropped_plate) if cropped_plate is not None else None,
+                    'cropped_plates': cropped_plates_pil,  # Danh sách tất cả biển số cắt
                     'plates': plates,
                     'processing_time': image_time
                 }
@@ -442,6 +454,7 @@ class MultiPlateApp:
                     'original_img': None,
                     'processed_img': None,
                     'cropped_plate': None,
+                    'cropped_plates': [],  # Danh sách rỗng khi lỗi
                     'plates': [],
                     'processing_time': image_time,
                     'error': str(e)
@@ -508,27 +521,91 @@ class MultiPlateApp:
             self.img_bbox_label.config(image='', text="Lỗi xử lý ảnh")
         
         # ========== Hiển thị ảnh biển số cắt (cột 2) ==========
-        if result['cropped_plate']:
-            cropped_img = self.resize_image_to_fit(result['cropped_plate'], 
-                                                    max_width=350, max_height=200)
-            tk_cropped = ImageTk.PhotoImage(cropped_img)
-            self.image_refs.append(tk_cropped)
-            self.img_plate_label.config(image=tk_cropped)
+        # Xóa các widget cũ trong plate_img_frame
+        for widget in self.plate_img_frame.winfo_children():
+            widget.destroy()
+        
+        # Lấy danh sách tất cả biển số cắt
+        cropped_plates = result.get('cropped_plates', [])
+        
+        if cropped_plates and len(cropped_plates) > 0:
+            num_plates = len(cropped_plates)
+            
+            # Tính số cột dựa trên số lượng biển số (tối đa 3 cột)
+            if num_plates <= 2:
+                num_cols = num_plates
+            elif num_plates <= 4:
+                num_cols = 2
+            else:
+                num_cols = 3
+            
+            # Tính kích thước ảnh dựa trên số cột
+            max_width_per_plate = max(100, 300 // num_cols)
+            max_height_per_plate = max(60, 120)
+            
+            # Tạo grid container
+            grid_container = tk.Frame(self.plate_img_frame, bg="#FFFDE7")
+            grid_container.pack(expand=True, fill="both")
+            
+            for i, plate_img in enumerate(cropped_plates):
+                row = i // num_cols
+                col = i % num_cols
+                
+                # Frame chứa từng biển số
+                plate_container = tk.Frame(grid_container, bg="#FFFDE7", padx=5, pady=5)
+                plate_container.grid(row=row, column=col, sticky="nsew")
+                
+                # Label số thứ tự
+                label_text = f"#{i+1}"
+                tk.Label(plate_container, text=label_text, 
+                        font=("Arial", 9, "bold"), fg="#1565C0", bg="#FFFDE7").pack()
+                
+                # Hiển thị ảnh biển số
+                cropped_img = self.resize_image_to_fit(plate_img, 
+                                                        max_width=max_width_per_plate, 
+                                                        max_height=max_height_per_plate)
+                tk_cropped = ImageTk.PhotoImage(cropped_img)
+                self.image_refs.append(tk_cropped)
+                
+                img_label = tk.Label(plate_container, image=tk_cropped, bg="#FFFDE7")
+                img_label.pack()
+            
+            # Cấu hình grid để các cột có kích thước đều nhau
+            for c in range(num_cols):
+                grid_container.columnconfigure(c, weight=1)
         else:
-            self.img_plate_label.config(image='', text="Không có biển số")
+            # Fallback: sử dụng cropped_plate cũ nếu không có cropped_plates
+            if result.get('cropped_plate'):
+                cropped_img = self.resize_image_to_fit(result['cropped_plate'], 
+                                                        max_width=350, max_height=200)
+                tk_cropped = ImageTk.PhotoImage(cropped_img)
+                self.image_refs.append(tk_cropped)
+                
+                img_label = tk.Label(self.plate_img_frame, image=tk_cropped, bg="#FFFDE7")
+                img_label.pack(expand=True)
+            else:
+                no_plate_label = tk.Label(self.plate_img_frame, text="Không có biển số", 
+                                         font=("Arial", 12), fg="#666", bg="#FFFDE7")
+                no_plate_label.pack(expand=True)
         
         # ========== Hiển thị text biển số ==========
+        # Hiển thị đầy đủ thông tin: số thứ tự + loại xe + biển số
         if result['plates']:
-            plate_text = ""
-            for p in result['plates']:
-                if "]" in p:
-                    _, number_part = p.split("]", 1)
-                    plate_text += number_part.strip() + "\n"
-                else:
-                    plate_text += p + "\n"
-            self.plate_text_label.config(text=plate_text.strip(), fg="#1565C0")
+            num_plates = len(result['plates'])
+            # Điều chỉnh font size dựa trên số lượng biển số
+            if num_plates <= 2:
+                font_size = 30
+            elif num_plates <= 4:
+                font_size = 18
+            else:
+                font_size = 16
+            
+            plate_text = "\n".join(result['plates'])
+            self.plate_text_label.config(text=plate_text, fg="#1565C0", 
+                                        font=("Arial", font_size, "bold"))
         else:
-            self.plate_text_label.config(text="Không nhận diện được", fg="#D32F2F")
+            self.plate_text_label.config(text="Không nhận diện được", fg="#D32F2F",
+                                        font=("Arial", 18, "bold"))
         
         # ========== Hiển thị thời gian xử lý ==========
         self.time_label.config(text=f"Thời gian xử lý: {result['processing_time']:.2f}s")
@@ -554,6 +631,11 @@ class MultiPlateApp:
     def on_file_select(self, event):
         """Xử lý sự kiện chọn file trong listbox"""
         selection = self.file_listbox.curselection()
+        if selection:
+            index = selection[0]
+            if index != self.current_index:
+                self.display_result(index)
+
     def on_file_double_click(self, event):
         """Xử lý sự kiện double click vào file trong listbox"""
         selection = self.file_listbox.curselection()

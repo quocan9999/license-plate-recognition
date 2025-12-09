@@ -210,7 +210,8 @@ __marimo__/
 History/
 history/
 
+#diagrams
 diagrams/
-diagrams
 
+#debug file
 debug_trace_gui.py
