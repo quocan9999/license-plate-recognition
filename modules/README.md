@@ -8,9 +8,9 @@ Package này chứa các module chính cho hệ thống nhận diện biển s�
 modules/
 ├── __init__.py          # Package initialization và exports
 ├── config.py            # Cấu hình và hằng số hệ thống
-├── detection.py         # Module phát hiện biển số (YOLO)
+├── detection.py         # Module phát hiện biển số (YOLOv8)
 ├── logger.py            # Module quản lý log và lịch sử
-├── ocr.py               # Module OCR và xử lý text
+├── ocr.py               # Module OCR và xử lý text (PaddleOCR)
 ├── preprocessing.py     # Module tiền xử lý ảnh
 ├── utils.py             # Module các hàm hỗ trợ
 ```
@@ -20,10 +20,12 @@ modules/
 ### 1. `config.py` - Module Cấu hình
 
 **Chức năng:**
-- Tập trung hóa toàn bộ cấu hình và hằng số của dự án.
-- Bao gồm: Đường dẫn model, màu sắc hiển thị, tham số thuật toán (CLAHE, Threshold, Warping), cài đặt OCR.
+
+-   Tập trung hóa toàn bộ cấu hình và hằng số của dự án.
+-   Bao gồm: Đường dẫn model, màu sắc hiển thị, tham số thuật toán (CLAHE, Threshold, Warping), cài đặt OCR.
 
 **Ví dụ:**
+
 ```python
 from modules.config import MODEL_PATH, COLOR_MOTO
 ```
@@ -33,11 +35,13 @@ from modules.config import MODEL_PATH, COLOR_MOTO
 **Class: `HistoryLogger`**
 
 **Chức năng:**
-- Quản lý việc lưu trữ lịch sử nhận diện.
-- Lưu ảnh gốc, ảnh ROI, ảnh tiền xử lý vào thư mục `History/Timestamp_Name`.
-- Ghi log chi tiết vào file `history.csv`.
+
+-   Quản lý việc lưu trữ lịch sử nhận diện.
+-   Lưu ảnh gốc, ảnh ROI, ảnh tiền xử lý vào thư mục `History/Timestamp_Name`.
+-   Ghi log chi tiết vào file `history.csv`.
 
 **Ví dụ sử dụng:**
+
 ```python
 from modules.logger import HistoryLogger
 
@@ -50,13 +54,15 @@ logger.save_result(image_path, original_img, detections)
 **Class: `LicensePlateDetector`**
 
 Chức năng:
-- Load và quản lý YOLO model
-- `_preprocess_image(image)` - Chuẩn hóa ảnh đầu vào (Private helper)
-- Phát hiện vùng biển số trong ảnh
-- Trích xuất ROI (Region of Interest)
-- Vẽ bounding box lên ảnh
+
+-   Load và quản lý YOLO model
+-   `_preprocess_image(image)` - Chuẩn hóa ảnh đầu vào (Private helper)
+-   Phát hiện vùng biển số trong ảnh
+-   Trích xuất ROI (Region of Interest)
+-   Vẽ bounding box lên ảnh
 
 Ví dụ sử dụng:
+
 ```python
 from modules.detection import LicensePlateDetector
 
@@ -69,31 +75,37 @@ plate_regions = detector.get_plate_regions(image)
 **Class: `LicensePlateOCR`**
 
 Chức năng:
-- Khởi tạo EasyOCR reader
-- Đọc text từ ảnh biển số
-- Cơ chế **Early Exit**: Dừng sớm nếu độ tin cậy > 0.8 để tăng tốc độ
-- Xử lý và sửa lỗi ký tự
-- Phân loại loại xe (Ô tô/Xe máy)
-- Format biển số theo chuẩn Việt Nam
+
+-   Khởi tạo PaddleOCR reader với cấu hình tối ưu
+-   Đọc text từ ảnh biển số sử dụng API `predict()` của PaddleOCR v3.x
+-   Cơ chế **Early Exit**: Dừng sớm nếu độ tin cậy > 0.9 để tăng tốc độ
+-   **Multi-hypothesis**: Thử nhiều phương pháp tiền xử lý, chọn kết quả tốt nhất
+-   Xử lý và sửa lỗi ký tự
+-   Phân loại loại xe (Ô tô/Xe máy)
+-   Format biển số theo chuẩn Việt Nam
 
 Ví dụ sử dụng:
+
 ```python
 from modules.ocr import LicensePlateOCR
 
 ocr = LicensePlateOCR()
-plate_info = ocr.process_plate(roi)
+plate_info = ocr.process_plate(roi, apply_warping=True)
+# plate_info chứa: raw_text, formatted_text, vehicle_type, confidence, preprocessed_image
 ```
 
 ### 5. `preprocessing.py` - Module Tiền xử lý
 
 **Functions:**
-- `preprocess_for_ocr(roi)` - Pipeline tiền xử lý tối ưu (Warped -> Gray -> CLAHE -> Otsu)
-- `detect_and_warp_plate(roi)` - Tự động phát hiện góc và nắn thẳng biển số
-- `apply_clahe(image)` - Cân bằng sáng cục bộ
-- `apply_super_resolution(image)` - Phóng to ảnh (Đã tắt mặc định để tối ưu tốc độ)
-- `four_point_transform(image, pts)` - Biến đổi hình học
+
+-   `preprocess_for_ocr(roi)` - Pipeline tiền xử lý tối ưu (Warped -> Gray -> CLAHE -> Otsu)
+-   `detect_and_warp_plate(roi)` - Tự động phát hiện góc và nắn thẳng biển số
+-   `apply_clahe(image)` - Cân bằng sáng cục bộ
+-   `apply_super_resolution(image)` - Phóng to ảnh (Đã tắt mặc định để tối ưu tốc độ)
+-   `four_point_transform(image, pts)` - Biến đổi hình học
 
 Ví dụ sử dụng:
+
 ```python
 from modules.preprocessing import preprocess_for_ocr, enhance_contrast
 
@@ -106,19 +118,23 @@ preprocessed = preprocess_for_ocr(roi)
 **Functions:**
 
 #### Phân loại và Validation
-- `classify_vehicle(ocr_list)` - Phân loại Ô tô/Xe máy
-- `validate_province_code(code_str)` - Kiểm tra mã tỉnh hợp lệ
+
+-   `classify_vehicle(ocr_list)` - Phân loại Ô tô/Xe máy
+-   `validate_province_code(code_str)` - Kiểm tra mã tỉnh hợp lệ
 
 #### Sửa lỗi và Format
-- `fix_plate_chars(raw_text, is_50cc=False)` - Sửa lỗi ký tự OCR
-- `format_plate(text, vehicle_type)` - Format biển số theo chuẩn VN
+
+-   `fix_plate_chars(raw_text, is_50cc=False)` - Sửa lỗi ký tự OCR
+-   `format_plate(text, vehicle_type)` - Format biển số theo chuẩn VN
 
 #### Constants
-- `VALID_PROVINCE_CODES` - Set mã tỉnh hợp lệ (11-99)
-- `dict_char_to_num` - Mapping chữ -> số
-- `dict_num_to_char` - Mapping số -> chữ
+
+-   `VALID_PROVINCE_CODES` - Set mã tỉnh hợp lệ (11-99)
+-   `dict_char_to_num` - Mapping chữ -> số
+-   `dict_num_to_char` - Mapping số -> chữ
 
 Ví dụ sử dụng:
+
 ```python
 from modules.utils import classify_vehicle, fix_plate_chars, format_plate
 
@@ -130,40 +146,45 @@ formatted = format_plate(clean_text, vehicle_type)
 ## Cấu trúc Biển số Việt Nam
 
 ### Ô tô
-- **1 dòng**: `30A12345` (mã tỉnh + chữ + 5 số)
-- **2 dòng**: `37A / 555.55` (dòng 1: mã tỉnh + chữ, dòng 2: số)
-- **Format**: `30A-123.45` hoặc `30A-4264`
+
+-   **1 dòng**: `30A12345` (mã tỉnh + chữ + 5 số)
+-   **2 dòng**: `37A / 555.55` (dòng 1: mã tỉnh + chữ, dòng 2: số)
+-   **Format**: `30A-123.45` hoặc `30A-4264`
 
 ### Xe máy thường
-- **2 dòng**: `29A1 / 123.45` (dòng 1: mã tỉnh + chữ + số, dòng 2: số)
-- **Format**: `29-A1 123.45` hoặc `29-A1 1234`
+
+-   **2 dòng**: `29A1 / 123.45` (dòng 1: mã tỉnh + chữ + số, dòng 2: số)
+-   **Format**: `29-A1 123.45` hoặc `29-A1 1234`
 
 ### Xe máy 50cc
-- **2 dòng**: `29AA / 12345` (dòng 1: mã tỉnh + 2 chữ, dòng 2: số)
-- **Format**: `29-AA 123.45` hoặc `29-AA 1234`
+
+-   **2 dòng**: `29AA / 12345` (dòng 1: mã tỉnh + 2 chữ, dòng 2: số)
+-   **Format**: `29-AA 123.45` hoặc `29-AA 1234`
 
 ## Thuật toán Sửa lỗi Ký tự
 
 Hệ thống sử dụng mapping thông minh để sửa lỗi OCR:
 
 ### Chữ -> Số (cho vị trí phải là số)
-- `I, L, T` → `1`
-- `O, Q, D, U` → `0`
-- `B, E` → `8`
-- `S` → `5`
-- `Z, R` → `2`
-- `G, C` → `6`
-- `A` → `4`
-- `J` → `3`
+
+-   `I, L, T` → `1`
+-   `O, Q, D, U` → `0`
+-   `B, E` → `8`
+-   `S` → `5`
+-   `Z, R` → `2`
+-   `G, C` → `6`
+-   `A` → `4`
+-   `J` → `3`
 
 ### Số -> Chữ (cho vị trí phải là chữ)
-- `0` → `D`
-- `1` → `I`
-- `2` → `Z`
-- `3, 8` → `B`
-- `4` → `A`
-- `5` → `S`
-- `6` → `G`
+
+-   `0` → `D`
+-   `1` → `I`
+-   `2` → `Z`
+-   `3, 8` → `B`
+-   `4` → `A`
+-   `5` → `S`
+-   `6` → `G`
 
 ## Sử dụng trong GUI
 
@@ -184,7 +205,7 @@ self.logger = HistoryLogger()
 plate_regions = self.detector.get_plate_regions(image)
 for roi, bbox in plate_regions:
     plate_info = self.ocr.process_plate(roi)
-    
+
 # Lưu lịch sử
 self.logger.save_result(path, img, detections)
 ```
@@ -199,8 +220,9 @@ self.logger.save_result(path, img, detections)
 
 ## Dependencies
 
-- `opencv-python` (cv2)
-- `numpy`
-- `easyocr`
-- `ultralytics` (YOLO)
-- `Pillow` (PIL)
+-   `opencv-python` (cv2)
+-   `numpy`
+-   `paddlepaddle` (PaddlePaddle deep learning framework)
+-   `paddleocr` (PaddleOCR v3.x)
+-   `ultralytics` (YOLOv8)
+-   `Pillow` (PIL)

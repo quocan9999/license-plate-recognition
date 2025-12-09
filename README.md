@@ -4,16 +4,18 @@
 
 ## 📖 Giới thiệu
 
-Dự án này là một hệ thống nhận diện biển số xe tự động sử dụng các kỹ thuật Học sâu (Deep Learning) và Xử lý ảnh. Hệ thống kết hợp **YOLOv8** để phát hiện vị trí biển số và **EasyOCR** để đọc ký tự, cùng với các kỹ thuật tiền xử lý ảnh (Warping, Grayscale) để tối ưu hóa độ chính xác.
+Dự án này là một hệ thống nhận diện biển số xe tự động sử dụng các kỹ thuật Học sâu (Deep Learning) và Xử lý ảnh. Hệ thống kết hợp **YOLOv8** để phát hiện vị trí biển số và **PaddleOCR** để đọc ký tự, cùng với các kỹ thuật tiền xử lý ảnh (Warping, CLAHE, Grayscale) để tối ưu hóa độ chính xác.
 
 ## 🚀 Tính năng
 
--   **Phát hiện biển số**: Nhận diện vị trí biển số xe máy, ô tô trong ảnh.
--   **Đọc biển số (OCR)**: Chuyển đổi hình ảnh biển số thành văn bản.
+-   **Phát hiện biển số**: Nhận diện vị trí biển số xe máy, ô tô trong ảnh bằng YOLOv8.
+-   **Đọc biển số (OCR)**: Chuyển đổi hình ảnh biển số thành văn bản sử dụng PaddleOCR.
+-   **Hỗ trợ nhiều biển số**: Nhận diện và hiển thị nhiều biển số trong cùng một ảnh.
 -   **Xử lý hàng loạt**: Hỗ trợ chọn và xử lý nhiều ảnh cùng lúc.
 -   **Tối ưu hóa hiệu năng**: Sử dụng đa luồng (Multithreading) và cơ chế dừng sớm (Early Exit) để tăng tốc độ xử lý.
+-   **Hiển thị ảnh tiền xử lý**: Xem ảnh đã qua các bước tiền xử lý (CLAHE, Warping) trực tiếp trên giao diện.
 -   **Lưu trữ lịch sử**: Tự động lưu ảnh gốc, ảnh cắt (ROI), ảnh tiền xử lý và kết quả vào thư mục `history`.
--   **Giao diện trực quan**: Giao diện GUI thân thiện xây dựng bằng Tkinter.
+-   **Giao diện trực quan**: Giao diện GUI thân thiện xây dựng bằng Tkinter với hỗ trợ kéo thả.
 
 ## 📂 Cấu trúc Dự án
 
@@ -25,7 +27,7 @@ license-plate-recognition/
 │   ├── config.py         # Cấu hình và hằng số hệ thống
 │   ├── detection.py      # Module phát hiện biển số (YOLO)
 │   ├── logger.py         # Module quản lý log và lịch sử
-│   ├── ocr.py            # Module đọc biển số (EasyOCR)
+│   ├── ocr.py            # Module đọc biển số (PaddleOCR)
 │   ├── preprocessing.py  # Module tiền xử lý ảnh
 │   └── utils.py          # Các hàm hỗ trợ (xử lý chuỗi, format)
 ├── models/               # Thư mục chứa model
@@ -108,6 +110,7 @@ python gui_multi.py
 -   **Cột 1 (Trái)**: Ảnh đã được vẽ bounding box lên biển số.
 -   **Cột 2 (Giữa)**:
     -   Ảnh vùng biển số đã cắt ra
+    -   Ảnh đã qua tiền xử lý (CLAHE, Warping)
     -   Text biển số nhận diện được (hiển thị lớn, rõ ràng)
     -   Thời gian xử lý của ảnh hiện tại
     -   Tổng thời gian xử lý tất cả ảnh
@@ -169,3 +172,5 @@ _Lưu ý: Nếu máy không có GPU NVIDIA mà bật True, chương trình sẽ 
 
 -   File `history.csv` trong thư mục `history` chứa log chi tiết của các lần nhận diện.
 -   Đảm bảo file model `models/best.pt (hoặc model của bạn)` đã tồn tại trước khi chạy.
+-   Hệ thống sử dụng **PaddleOCR v3.x** với API `predict()` thay cho EasyOCR.
+-   PaddleOCR sẽ tự động tải model về thư mục `~/.paddlex/` khi chạy lần đầu.
