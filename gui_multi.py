@@ -124,12 +124,36 @@ class MultiPlateApp:
         self.col2_frame = tk.Frame(self.main_frame, bg="#FFFDE7")
         self.col2_frame.grid(row=0, column=2, sticky="nsew")
         
+        # Tạo Canvas và Scrollbar cho cột 2
+        self.col2_canvas = tk.Canvas(self.col2_frame, bg="#FFFDE7", highlightthickness=0)
+        self.col2_scrollbar = tk.Scrollbar(self.col2_frame, orient="vertical", command=self.col2_canvas.yview)
+        
+        # Frame chứa nội dung bên trong canvas (scrollable)
+        self.col2_content = tk.Frame(self.col2_canvas, bg="#FFFDE7")
+        
+        # Tạo window trong canvas
+        self.col2_canvas_window = self.col2_canvas.create_window((0, 0), window=self.col2_content, anchor="nw")
+        
+        # Cấu hình canvas scroll
+        self.col2_canvas.configure(yscrollcommand=self.col2_scrollbar.set)
+        
+        # Pack canvas (scrollbar sẽ được show/hide động)
+        self.col2_canvas.pack(side="left", fill="both", expand=True)
+        
+        # Bind sự kiện resize để cập nhật chiều rộng content
+        self.col2_canvas.bind("<Configure>", self._on_col2_canvas_configure)
+        self.col2_content.bind("<Configure>", self._on_col2_content_configure)
+        
+        # Bind mouse wheel cho cột 2
+        self.col2_canvas.bind("<Enter>", self._bind_col2_mousewheel)
+        self.col2_canvas.bind("<Leave>", self._unbind_col2_mousewheel)
+        
         # Frame chứa ảnh biển số cắt (sẽ được tạo động trong display_result)
-        self.plate_img_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
+        self.plate_img_frame = tk.Frame(self.col2_content, bg="#FFFDE7")
         self.plate_img_frame.pack(expand=True, fill="both", padx=10, pady=10)
         
         # ========== Phần hiển thị thông tin biển số ==========
-        self.info_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
+        self.info_frame = tk.Frame(self.col2_content, bg="#FFFDE7")
         self.info_frame.pack(fill="x", padx=10, pady=10)
         
         # Text biển số nhận diện được (to, dễ nhìn)
@@ -148,7 +172,7 @@ class MultiPlateApp:
         self.total_time_label.pack(pady=5)
         
         # ========== Các nút điều khiển ==========
-        self.control_frame = tk.Frame(self.col2_frame, bg="#FFFDE7")
+        self.control_frame = tk.Frame(self.col2_content, bg="#FFFDE7")
         self.control_frame.pack(fill="x", padx=10, pady=15)
         
         # Nút Tự động
@@ -220,6 +244,54 @@ class MultiPlateApp:
         def _on_mousewheel(event):
             self.file_listbox.yview_scroll(int(-1 * (event.delta / 120)), "units")
         self.file_listbox.bind("<MouseWheel>", _on_mousewheel)
+
+    def _on_col2_canvas_configure(self, event):
+        """Xử lý khi canvas cột 2 thay đổi kích thước"""
+        # Cập nhật chiều rộng của content frame theo canvas
+        self.col2_canvas.itemconfig(self.col2_canvas_window, width=event.width)
+    
+    def _on_col2_content_configure(self, event):
+        """Xử lý khi nội dung cột 2 thay đổi kích thước"""
+        # Cập nhật scroll region
+        self.col2_canvas.configure(scrollregion=self.col2_canvas.bbox("all"))
+        
+        # Kiểm tra xem nội dung có tràn không để hiển thị/ẩn scrollbar
+        canvas_height = self.col2_canvas.winfo_height()
+        content_height = event.height
+        
+        if content_height > canvas_height:
+            # Nội dung tràn -> hiển thị scrollbar
+            if not self.col2_scrollbar.winfo_ismapped():
+                self.col2_scrollbar.pack(side="right", fill="y")
+        else:
+            # Nội dung không tràn -> ẩn scrollbar
+            if self.col2_scrollbar.winfo_ismapped():
+                self.col2_scrollbar.pack_forget()
+    
+    def _bind_col2_mousewheel(self, event):
+        """Bind mouse wheel khi hover vào cột 2"""
+        self.col2_canvas.bind_all("<MouseWheel>", self._on_col2_mousewheel)
+    
+    def _unbind_col2_mousewheel(self, event):
+        """Unbind mouse wheel khi rời cột 2"""
+        self.col2_canvas.unbind_all("<MouseWheel>")
+    
+    def _on_col2_mousewheel(self, event):
+        """Xử lý mouse wheel scroll cho cột 2"""
+        self.col2_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+    
+    def _open_pil_image_external(self, pil_image, prefix="temp_plate"):
+        """Lưu ảnh PIL tạm và mở bằng phần mềm mặc định"""
+        import tempfile
+        # Tạo file tạm
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, f"{prefix}_{id(pil_image)}.png")
+        
+        # Lưu ảnh
+        pil_image.save(temp_path)
+        
+        # Mở bằng phần mềm mặc định
+        self.open_image_external(temp_path)
 
     def drop_files(self, event):
         """Xử lý sự kiện kéo thả file"""
@@ -580,8 +652,12 @@ class MultiPlateApp:
                 tk_cropped = ImageTk.PhotoImage(cropped_img)
                 self.image_refs.append(tk_cropped)
                 
-                img_label = tk.Label(plate_container, image=tk_cropped, bg="#FFFDE7")
+                img_label = tk.Label(plate_container, image=tk_cropped, bg="#FFFDE7", cursor="hand2")
                 img_label.pack()
+                
+                # Bind double-click để mở ảnh bằng phần mềm mặc định
+                img_label.bind("<Double-Button-1>", 
+                              lambda e, img=plate_img: self._open_pil_image_external(img, "cropped_plate"))
             
             # Cấu hình grid để các cột có kích thước đều nhau
             for c in range(num_cols):
@@ -594,8 +670,12 @@ class MultiPlateApp:
                 tk_cropped = ImageTk.PhotoImage(cropped_img)
                 self.image_refs.append(tk_cropped)
                 
-                img_label = tk.Label(self.plate_img_frame, image=tk_cropped, bg="#FFFDE7")
+                img_label = tk.Label(self.plate_img_frame, image=tk_cropped, bg="#FFFDE7", cursor="hand2")
                 img_label.pack(expand=True)
+                
+                # Bind double-click để mở ảnh
+                img_label.bind("<Double-Button-1>", 
+                              lambda e, img=result['cropped_plate']: self._open_pil_image_external(img, "cropped_plate"))
             else:
                 no_plate_label = tk.Label(self.plate_img_frame, text="Không có biển số", 
                                          font=("Arial", 12), fg="#666", bg="#FFFDE7")
@@ -653,8 +733,12 @@ class MultiPlateApp:
                 tk_preproc = ImageTk.PhotoImage(resized_preproc)
                 self.image_refs.append(tk_preproc)
                 
-                preproc_img_label = tk.Label(preproc_item, image=tk_preproc, bg="#FFFDE7")
+                preproc_img_label = tk.Label(preproc_item, image=tk_preproc, bg="#FFFDE7", cursor="hand2")
                 preproc_img_label.pack()
+                
+                # Bind double-click để mở ảnh bằng phần mềm mặc định
+                preproc_img_label.bind("<Double-Button-1>", 
+                                      lambda e, img=preproc_img: self._open_pil_image_external(img, "preprocessed"))
             
             # Cấu hình grid
             for c in range(num_cols_preproc):
