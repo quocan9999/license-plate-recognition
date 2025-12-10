@@ -215,3 +215,7 @@ diagrams/
 
 #debug file
 debug_trace_gui.py
+debug_clahe.py
+
+#test case
+test_case/
