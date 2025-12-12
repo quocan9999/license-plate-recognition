@@ -78,7 +78,7 @@ source .venv/bin/activate
 Để tối ưu dung lượng và tương thích, hãy cài đặt phiên bản PyTorch dành cho CPU trước:
 
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cpu
 ```
 
 > **Lưu ý:** Nếu bạn muốn sử dụng GPU thì hãy chuyển sang phần `6. Hướng dẫn sử dụng GPU (Nâng cao)`
@@ -155,7 +155,7 @@ pip uninstall torch torchvision torchaudio -y
 Sau đó, cài đặt phiên bản hỗ trợ CUDA 11.8 (Dung lượng tải về khá lớn, khoảng **2-3GB**):
 
 ```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu118
 ```
 
 **Bước 2: Bật cấu hình GPU**
